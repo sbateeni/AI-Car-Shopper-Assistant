@@ -262,11 +262,13 @@ def clean_json_string(json_str):
 def compare_cars(car1, car2, language):
     try:
         # Prepare the comparison prompt
-        comparison_prompt = f"""قم بمقارنة السيارتين التاليتين بتنسيق JSON:
+        comparison_prompt = f"""قم بمقارنة السيارتين التاليتين:
         السيارة الأولى: {car1['details']['year']} {car1['details']['brand']} {car1['details']['model']}
         السيارة الثانية: {car2['details']['year']} {car2['details']['brand']} {car2['details']['model']}
         
-        قم بإرجاع النتيجة بتنسيق JSON بالشكل التالي:
+        قم بإرجاع النتيجة بتنسيق JSON فقط، بدون أي نص إضافي قبل أو بعد الكائن.
+        يجب أن تكون جميع الإجابات باللغة العربية.
+        
         {{
             "general_comparison": {{
                 "winner": "السيارة الفائزة في المقارنة العامة",
@@ -295,10 +297,7 @@ def compare_cars(car1, car2, language):
                 "reason": "سبب التوصية",
                 "suitable_for": "مناسبة لمن؟"
             }}
-        }}
-        
-        يجب أن تكون جميع الإجابات باللغة العربية.
-        قم بإرجاع كائن JSON فقط، بدون أي نص إضافي قبل أو بعد الكائن."""
+        }}"""
         
         # Generate comparison
         response = model.generate_content(comparison_prompt)
