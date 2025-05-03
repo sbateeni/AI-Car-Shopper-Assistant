@@ -17,8 +17,8 @@ if not api_key:
     st.stop()
 
 genai.configure(api_key=api_key)
-vision_model = genai.GenerativeModel('gemini-pro-vision')
-text_model = genai.GenerativeModel('gemini-pro')
+vision_model = genai.GenerativeModel('models/gemini-2.0-flash-001')
+text_model = genai.GenerativeModel('models/gemini-2.0-flash-001')
 
 # Set page configuration
 st.set_page_config(
@@ -34,6 +34,10 @@ st.write("Upload an image or use your camera to detect the type of car and get d
 # Function to process image with Gemini Vision API
 def detect_car(image):
     try:
+        # Convert image to RGB if it's in RGBA mode
+        if image.mode == 'RGBA':
+            image = image.convert('RGB')
+            
         # Convert image to bytes
         img_byte_arr = io.BytesIO()
         image.save(img_byte_arr, format='JPEG')
