@@ -1,14 +1,20 @@
 import google.generativeai as genai
 import streamlit as st
 from .config import GEMINI_SETTINGS
+import os
+from dotenv import load_dotenv
+
+# تحميل المتغيرات من ملف .env
+load_dotenv()
 
 def configure_api():
-    """تكوين مفتاح API باستخدام Streamlit secrets"""
-    if 'GOOGLE_API_KEY' in st.secrets:
-        genai.configure(api_key=st.secrets['GOOGLE_API_KEY'])
+    """تكوين مفتاح API باستخدام ملف .env"""
+    api_key = os.getenv('GOOGLE_API_KEY')
+    if api_key:
+        genai.configure(api_key=api_key)
         return True
     else:
-        st.error("⚠️ لم يتم العثور على مفتاح API. يرجى إضافة مفتاح API في إعدادات Streamlit secrets.")
+        st.error("⚠️ لم يتم العثور على مفتاح API. يرجى إضافة مفتاح API في ملف .env")
         return False
 
 def call_gemini_vision(image_base64, text_prompt):
