@@ -68,12 +68,15 @@ if app_mode == "📊 مقارنة عدة سيارات":
                 st.info(car_description)
 
                 # 2. تمويه اللوحة
-                blurred_base64 = detect_and_blur_plate(img_bytes)
-                blurred_image = base64_to_image(blurred_base64)
+                blurred_image = detect_and_blur_plate(img_bytes)
+                if blurred_image is None:
+                    st.error("حدث خطأ أثناء تمويه لوحة الترخيص")
+                    st.stop()
                 st.image(blurred_image, caption="الصورة المعالجة (اللوحة مموهة)", width=UI_SETTINGS["image_display"]["processed_width"])
 
                 # 3. استدعاء Gemini للتحليل التفصيلي
                 vision_prompt = "حلل هذه الصورة لسيارة. حدد الماركة، الموديل، والسنة التقديرية. اذكر المواصفات الرئيسية والعيوب الشائعة المعروفة. تجاهل لوحة الترخيص."
+                blurred_base64 = image_to_base64(blurred_image)
                 car_info = call_gemini_vision(blurred_base64, vision_prompt)
 
                 car_data = {
@@ -188,13 +191,16 @@ elif app_mode == "✔️ تقييم سيارة واحدة":
                     st.info(car_description)
 
                     # 2. تمويه اللوحة
-                    blurred_base64_single = detect_and_blur_plate(img_bytes)
-                    blurred_image_single = base64_to_image(blurred_base64_single)
-                    st.image(blurred_image_single, caption="الصورة المعالجة (اللوحة مموهة)", width=UI_SETTINGS["image_display"]["single_car_width"])
+                    blurred_image = detect_and_blur_plate(img_bytes)
+                    if blurred_image is None:
+                        st.error("حدث خطأ أثناء تمويه لوحة الترخيص")
+                        st.stop()
+                    st.image(blurred_image, caption="الصورة المعالجة (اللوحة مموهة)", width=UI_SETTINGS["image_display"]["single_car_width"])
 
                     # 3. استدعاء Gemini للتحليل التفصيلي
-                    vision_prompt_single = "حلل هذه الصورة لسيارة. حدد الماركة، الموديل، والسنة التقديرية. اذكر المواصفات الرئيسية والعيوب الشائعة المعروفة. تجاهل لوحة الترخيص."
-                    car_info_single = call_gemini_vision(blurred_base64_single, vision_prompt_single)
+                    vision_prompt = "حلل هذه الصورة لسيارة. حدد الماركة، الموديل، والسنة التقديرية. اذكر المواصفات الرئيسية والعيوب الشائعة المعروفة. تجاهل لوحة الترخيص."
+                    blurred_base64 = image_to_base64(blurred_image)
+                    car_info = call_gemini_vision(blurred_base64, vision_prompt)
 
                     car_name_year_single = "السيارة المفردة (المستخرجة من التحليل)"
 
@@ -209,7 +215,7 @@ elif app_mode == "✔️ تقييم سيارة واحدة":
                     # 6. استدعاء Gemini لتقديم النصح والتقييم
                     advice_prompt = f"""
                     حلل السيارة التالية:
-                    {car_info_single}
+                    {car_info}
 
                     معلومات إضافية:
                     - الدولة: {selected_country}
@@ -223,7 +229,7 @@ elif app_mode == "✔️ تقييم سيارة واحدة":
                     # عرض النتائج
                     st.subheader("📝 نتيجة التقييم")
                     st.markdown("**معلومات السيارة المحللة:**")
-                    st.write(car_info_single)
+                    st.write(car_info)
                     st.info(f"**متوسط سعر السوق في {selected_country}:** {market_price_single}")
                     st.info(f"**أسعار الوقود في {selected_country}:** {fuel_prices_single}")
                     st.success(f"**💡 نصيحة الشراء (التقييم من 10):**\n{final_advice}")

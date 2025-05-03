@@ -1,8 +1,6 @@
 import io
 import base64
-from PIL import Image
-import cv2
-import numpy as np
+from PIL import Image, ImageFilter
 import streamlit as st
 from .config import BLUR_SETTINGS
 
@@ -19,36 +17,34 @@ def base64_to_image(base64_string):
 
 def detect_and_blur_plate(image_bytes):
     """
-    تكتشف وتموه لوحة الترخيص في الصورة.
+    تمويه منطقة لوحة الترخيص في الصورة
     """
     try:
-        # تحويل الصورة إلى تنسيق OpenCV
-        image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
-        img_cv = np.array(image)
+        # تحويل الصورة إلى تنسيق PIL
+        image = Image.open(io.BytesIO(image_bytes))
         
         # تمويه منطقة افتراضية
-        h, w = img_cv.shape[:2]
+        width, height = image.size
         region = BLUR_SETTINGS["region"]
-        blur_zone = img_cv[
-            int(h * region["height_start"]):int(h * region["height_end"]),
-            int(w * region["width_start"]):int(w * region["width_end"])
-        ]
         
-        if blur_zone.size > 0:
-            blur_params = BLUR_SETTINGS["blur"]
-            blurred_roi = cv2.GaussianBlur(
-                blur_zone,
-                blur_params["kernel_size"],
-                blur_params["sigma"]
-            )
-            img_cv[
-                int(h * region["height_start"]):int(h * region["height_end"]),
-                int(w * region["width_start"]):int(w * region["width_end"])
-            ] = blurred_roi
-
-        # تحويل الصورة المعالجة إلى تنسيق base64
-        blurred_image_pil = Image.fromarray(img_cv)
-        return image_to_base64(blurred_image_pil)
+        # تحديد منطقة التمويه
+        x1 = int(width * region["width_start"])
+        y1 = int(height * region["height_start"])
+        x2 = int(width * region["width_end"])
+        y2 = int(height * region["height_end"])
+        
+        # قص المنطقة المراد تمويهها
+        region_to_blur = image.crop((x1, y1, x2, y2))
+        
+        # تطبيق التمويه
+        blur_params = BLUR_SETTINGS["blur"]
+        blurred_region = region_to_blur.filter(ImageFilter.GaussianBlur(radius=blur_params["sigma"]))
+        
+        # لصق المنطقة المموهة في الصورة الأصلية
+        image.paste(blurred_region, (x1, y1))
+        
+        return image
+        
     except Exception as e:
         st.error(f"خطأ في معالجة الصورة: {e}")
-        return base64.b64encode(image_bytes).decode() 
+        return None 
