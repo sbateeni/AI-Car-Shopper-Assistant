@@ -4,6 +4,7 @@ import io
 import cv2
 import numpy as np
 import google.generativeai as genai
+import base64
 
 # --- إعدادات أولية ---
 # تكوين مفتاح API باستخدام Streamlit secrets
@@ -15,81 +16,75 @@ else:
 
 # --- دوال مساعدة (تحتاج إلى تطبيق فعلي) ---
 
+def image_to_base64(image):
+    """تحويل الصورة إلى تنسيق base64"""
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
+
+def base64_to_image(base64_string):
+    """تحويل base64 إلى صورة"""
+    image_data = base64.b64decode(base64_string)
+    return Image.open(io.BytesIO(image_data))
+
 def detect_and_blur_plate(image_bytes):
     """
     (Placeholder) تكتشف وتموه لوحة الترخيص في الصورة.
     تحتاج هذه الدالة إلى تطبيق فعلي باستخدام OpenCV ونموذج اكتشاف كائنات.
     """
     try:
+        # تحويل الصورة إلى تنسيق OpenCV
         image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
         img_cv = np.array(image)
-        # --- منطق اكتشاف اللوحة (مثال بسيط باستخدام Haar Cascade - يحتاج تدريب أو ملف XML جاهز) ---
-        # gray = cv2.cvtColor(img_cv, cv2.COLOR_RGB2GRAY)
-        # plate_cascade = cv2.CascadeClassifier('path/to/haarcascade_russian_plate_number.xml') # تحتاج ملف XML
-        # plates = plate_cascade.detectMultiScale(gray, 1.1, 4)
-        # for (x, y, w, h) in plates:
-        #     roi = img_cv[y:y+h, x:x+w]
-        #     roi = cv2.GaussianBlur(roi, (23, 23), 30) # تطبيق التمويه
-        #     img_cv[y:y+roi.shape[0], x:x+roi.shape[1]] = roi # إعادة الجزء المموه للصورة الأصلية
-
-        # --- حل مؤقت: تمويه جزء افتراضي من الصورة ---
+        
+        # تمويه منطقة افتراضية
         h, w = img_cv.shape[:2]
-        # تمويه منطقة أسفل الوسط (كمثال)
         blur_zone = img_cv[int(h*0.7):int(h*0.9), int(w*0.3):int(w*0.7)]
         if blur_zone.size > 0:
-             blurred_roi = cv2.GaussianBlur(blur_zone, (51, 51), 30)
-             img_cv[int(h*0.7):int(h*0.9), int(w*0.3):int(w*0.7)] = blurred_roi
-        # --- نهاية الحل المؤقت ---
+            blurred_roi = cv2.GaussianBlur(blur_zone, (51, 51), 30)
+            img_cv[int(h*0.7):int(h*0.9), int(w*0.3):int(w*0.7)] = blurred_roi
 
+        # تحويل الصورة المعالجة إلى تنسيق base64
         blurred_image_pil = Image.fromarray(img_cv)
-        buf = io.BytesIO()
-        blurred_image_pil.save(buf, format='PNG')
-        blurred_image_bytes = buf.getvalue()
-        return blurred_image_bytes
+        return image_to_base64(blurred_image_pil)
     except Exception as e:
         st.error(f"خطأ في معالجة الصورة: {e}")
-        return image_bytes # إرجاع الصورة الأصلية في حالة الفشل
+        return base64.b64encode(image_bytes).decode()
 
-def call_gemini_vision(image_bytes, text_prompt):
+def call_gemini_vision(image_base64, text_prompt):
     """
     (Placeholder) تستدعي Gemini API لتحليل الصورة والنص.
     تحتاج إلى تطبيق فعلي لاستدعاء API.
     """
-    model = genai.GenerativeModel('gemini-pro-vision') # أو النموذج الأحدث المناسب
-    image_parts = [{"mime_type": "image/png", "data": image_bytes}]
-    response = model.generate_content([text_prompt, image_parts])
-    return response.text
-    # --- رد وهمي للتجربة ---
-    # return f"""
-    # **السيارة المحددة:** تويوتا كامري 2022 (تقديري)
-    # **المواصفات:** محرك 4 سلندر 2.5 لتر، ناقل حركة أوتوماتيكي 8 سرعات، دفع أمامي.
-    # **المميزات:** موثوقية عالية، استهلاك وقود جيد، مقصورة واسعة.
-    # **العيوب الشائعة:** تصميم داخلي قديم بعض الشيء، تسارع متوسط.
-    # """
+    try:
+        model = genai.GenerativeModel('gemini-pro-vision') # أو النموذج الأحدث المناسب
+        image_parts = [{"mime_type": "image/png", "data": image_base64}]
+        response = model.generate_content([text_prompt, image_parts])
+        return response.text
+    except Exception as e:
+        st.error(f"خطأ في استدعاء Gemini API: {e}")
+        return "عذراً، حدث خطأ في تحليل الصورة. يرجى المحاولة مرة أخرى."
 
 def call_gemini_text(text_prompt):
     """
     (Placeholder) تستدعي Gemini API لمعالجة النصوص (للبحث عن الأسعار، الوقود، المقارنة).
     تحتاج إلى تطبيق فعلي لاستدعاء API.
     """
-    model = genai.GenerativeModel('gemini-pro') # أو النموذج الأحدث
-    response = model.generate_content(text_prompt)
-    return response.text
-    # --- ردود وهمية للتجربة ---
-    if "سعر السوق" in text_prompt:
-        return "متوسط سعر السوق المقدر في البلد المحدد: 25,000 - 28,000 دولار أمريكي (كمثال)."
-    elif "أسعار الوقود" in text_prompt:
-        return "أسعار الوقود الحالية في البلد المحدد: بنزين 95: 1.8 دولار/لتر، ديزل: 1.6 دولار/لتر (كمثال)."
-    elif "قارن بين" in text_prompt:
-        return "بناءً على المقارنة، السيارة 1 (تويوتا كامري) تبدو خيارًا أفضل للموثوقية وتكاليف التشغيل طويلة الأمد، بينما السيارة 2 (هوندا أكورد) قد توفر تجربة قيادة رياضية أكثر."
-    elif "نصيحتك بشرائها" in text_prompt:
-        return "**التقييم: 8/10** \nسيارة موثوقة واقتصادية ومناسبة للاستخدام اليومي. سعرها في السوق معقول. العيوب المذكورة ليست جوهرية لمعظم المستخدمين."
-    else:
-        return "استجابة نصية من Gemini (Placeholder)."
+    try:
+        model = genai.GenerativeModel('gemini-pro') # أو النموذج الأحدث
+        response = model.generate_content(text_prompt)
+        return response.text
+    except Exception as e:
+        st.error(f"خطأ في استدعاء Gemini API: {e}")
+        return "عذراً، حدث خطأ في معالجة النص. يرجى المحاولة مرة أخرى."
 
 
 # --- واجهة المستخدم Streamlit ---
-st.set_page_config(layout="wide", page_title="مساعد شراء السيارات الذكي")
+st.set_page_config(
+    layout="wide",
+    page_title="مساعد شراء السيارات الذكي",
+    page_icon="🚗"
+)
 st.title("🚗 مساعد شراء السيارات الذكي")
 st.markdown("قم بتصوير السيارات التي تفكر في شرائها للمقارنة أو التقييم.")
 
@@ -128,17 +123,18 @@ if app_mode == "📊 مقارنة عدة سيارات":
 
         with st.spinner("⏳ جارٍ معالجة الصورة وتحليل السيارة..."):
             # 1. تمويه اللوحة
-            blurred_bytes = detect_and_blur_plate(img_bytes)
-            st.image(blurred_bytes, caption="الصورة المعالجة (اللوحة مموهة)", width=300)
+            blurred_base64 = detect_and_blur_plate(img_bytes)
+            blurred_image = base64_to_image(blurred_base64)
+            st.image(blurred_image, caption="الصورة المعالجة (اللوحة مموهة)", width=300)
 
             # 2. استدعاء Gemini Vision للتحليل
             vision_prompt = "حلل هذه الصورة لسيارة. حدد الماركة، الموديل، والسنة التقديرية. اذكر المواصفات الرئيسية والعيوب الشائعة المعروفة. تجاهل لوحة الترخيص."
-            car_info = call_gemini_vision(blurred_bytes, vision_prompt)
+            car_info = call_gemini_vision(blurred_base64, vision_prompt)
 
             # (تحسين مستقبلي: استخلاص بيانات منظمة من car_info)
             car_data = {
                 "id": f"car_{len(st.session_state.cars_to_compare)}",
-                "image": blurred_bytes,
+                "image": blurred_base64,
                 "info": car_info,
                 "country": selected_country # حفظ الدولة مع السيارة
             }
@@ -153,7 +149,8 @@ if app_mode == "📊 مقارنة عدة سيارات":
         cols = st.columns(len(st.session_state.cars_to_compare))
         for i, car in enumerate(st.session_state.cars_to_compare):
             with cols[i]:
-                st.image(car["image"], caption=f"سيارة {i+1}", use_column_width=True)
+                car_image = base64_to_image(car["image"])
+                st.image(car_image, caption=f"سيارة {i+1}", use_column_width=True)
                 st.markdown(car["info"])
                 if st.button(f"🗑️ إزالة السيارة {i+1}", key=f"remove_{car['id']}"):
                     st.session_state.cars_to_compare.pop(i)
@@ -198,7 +195,8 @@ if app_mode == "📊 مقارنة عدة سيارات":
                 res_cols = st.columns(len(st.session_state.cars_to_compare))
                 for i, car in enumerate(st.session_state.cars_to_compare):
                      with res_cols[i]:
-                         st.image(car["image"], caption=f"سيارة {i+1}", use_column_width=True)
+                         car_image = base64_to_image(car["image"])
+                         st.image(car_image, caption=f"سيارة {i+1}", use_column_width=True)
                          st.markdown(f"**المعلومات:**\n {car['info']}")
                          st.success(f"**السعر المقدر:**\n {car.get('market_price', 'غير متوفر')}")
 
@@ -227,12 +225,13 @@ elif app_mode == "✔️ تقييم سيارة واحدة":
         if st.button("🧐 قيّم هذه السيارة", key="evaluate_button"):
             with st.spinner("⏳ جارٍ تحليل السيارة والبحث عن المعلومات..."):
                 # 1. تمويه اللوحة
-                blurred_bytes_single = detect_and_blur_plate(img_bytes_single)
-                st.image(blurred_bytes_single, caption="الصورة المعالجة (اللوحة مموهة)", width=400)
+                blurred_base64_single = detect_and_blur_plate(img_bytes_single)
+                blurred_image_single = base64_to_image(blurred_base64_single)
+                st.image(blurred_image_single, caption="الصورة المعالجة (اللوحة مموهة)", width=400)
 
                 # 2. استدعاء Gemini Vision للتحليل
                 vision_prompt_single = "حلل هذه الصورة لسيارة. حدد الماركة، الموديل، والسنة التقديرية. اذكر المواصفات الرئيسية والعيوب الشائعة المعروفة. تجاهل لوحة الترخيص."
-                car_info_single = call_gemini_vision(blurred_bytes_single, vision_prompt_single)
+                car_info_single = call_gemini_vision(blurred_base64_single, vision_prompt_single)
 
                 # (تحسين: استخلاص اسم وسنة السيارة من car_info_single)
                 car_name_year_single = "السيارة المفردة (المستخرجة من التحليل)"
