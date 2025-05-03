@@ -58,13 +58,13 @@ if app_mode == "📊 مقارنة عدة سيارات":
             st.image(img_bytes, caption="الصورة الأصلية", width=UI_SETTINGS["image_display"]["original_width"])
 
             with st.spinner("⏳ جارٍ معالجة الصورة وتحليل السيارة..."):
-                # 1. الكشف عن السيارة
-                detected_image, car_description = detect_car(img_bytes)
-                if detected_image is None:
+                # 1. تحليل السيارة
+                analyzed_image, car_description = analyze_car(img_bytes)
+                if analyzed_image is None:
                     st.error(car_description)
                     st.stop()
                 
-                st.image(detected_image, caption="تم الكشف عن السيارة", width=UI_SETTINGS["image_display"]["processed_width"])
+                st.image(analyzed_image, caption="تم تحليل السيارة", width=UI_SETTINGS["image_display"]["processed_width"])
                 st.info(car_description)
 
                 # 2. تمويه اللوحة
@@ -75,7 +75,11 @@ if app_mode == "📊 مقارنة عدة سيارات":
                 st.image(blurred_image, caption="الصورة المعالجة (اللوحة مموهة)", width=UI_SETTINGS["image_display"]["processed_width"])
 
                 # 3. استدعاء Gemini للتحليل التفصيلي
-                vision_prompt = "حلل هذه الصورة لسيارة. حدد الماركة، الموديل، والسنة التقديرية. اذكر المواصفات الرئيسية والعيوب الشائعة المعروفة. تجاهل لوحة الترخيص."
+                vision_prompt = f"""حلل هذه الصورة لسيارة. 
+                المعلومات الأولية من التحليل: {car_description}
+                حدد الماركة، الموديل، والسنة التقديرية. 
+                اذكر المواصفات الرئيسية والعيوب الشائعة المعروفة. 
+                تجاهل لوحة الترخيص."""
                 blurred_base64 = image_to_base64(blurred_image)
                 car_info = call_gemini_vision(blurred_base64, vision_prompt)
 

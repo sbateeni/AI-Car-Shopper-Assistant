@@ -1,35 +1,43 @@
-from PIL import Image, ImageDraw
+from transformers import AutoImageProcessor, AutoModelForImageClassification
+import torch
+from PIL import Image
 import io
 import streamlit as st
 
-def detect_car(image_bytes):
+def load_model():
+    """تحميل نموذج Swin Transformer من Hugging Face"""
+    try:
+        processor = AutoImageProcessor.from_pretrained("microsoft/swin-base-patch4-window7-224-in22k")
+        model = AutoModelForImageClassification.from_pretrained("microsoft/swin-base-patch4-window7-224-in22k")
+        return processor, model
+    except Exception as e:
+        st.error(f"خطأ في تحميل النموذج: {e}")
+        return None, None
+
+def analyze_car(image_bytes):
     """
-    تحليل الصورة باستخدام معالجة الصور الأساسية
+    تحليل الصورة باستخدام Swin Transformer
     """
     try:
+        # تحميل النموذج
+        processor, model = load_model()
+        if processor is None or model is None:
+            return None, "لم يتمكن من تحميل النموذج"
+
         # تحويل الصورة إلى تنسيق PIL
         image = Image.open(io.BytesIO(image_bytes))
         
-        # تحليل الصورة
-        width, height = image.size
-        aspect_ratio = width / height
+        # معالجة الصورة
+        inputs = processor(images=image, return_tensors="pt")
+        outputs = model(**inputs)
         
-        # تحديد ما إذا كانت الصورة تحتوي على سيارة بناءً على نسبة العرض إلى الارتفاع
-        is_car = 1.5 <= aspect_ratio <= 3.0
+        # تحليل النتائج
+        logits = outputs.logits
+        predicted_class_idx = logits.argmax(-1).item()
+        confidence = torch.nn.functional.softmax(logits, dim=-1)[0][predicted_class_idx].item()
         
-        if is_car:
-            # رسم مربع حول المنطقة المتوقعة للسيارة
-            draw = ImageDraw.Draw(image)
-            margin = 0.1
-            x1 = width * margin
-            y1 = height * margin
-            x2 = width * (1 - margin)
-            y2 = height * (1 - margin)
-            draw.rectangle([(x1, y1), (x2, y2)], outline="green", width=2)
-            
-            car_description = "تم الكشف عن سيارة في الصورة"
-        else:
-            car_description = "لم يتم العثور على سيارة في الصورة"
+        # تحضير وصف للنتيجة
+        car_description = f"تم تحليل الصورة بثقة {confidence:.2f}"
         
         return image, car_description
         
