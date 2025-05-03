@@ -1,57 +1,49 @@
-from ultralytics import YOLO
-import cv2
-import numpy as np
+from transformers import DetrImageProcessor, DetrForObjectDetection
+import torch
 from PIL import Image, ImageDraw
 import io
 import streamlit as st
 import os
 
 def load_model():
-    """تحميل نموذج YOLOv8"""
+    """تحميل نموذج DETR من Hugging Face"""
     try:
-        # تحميل النموذج من المسار المحلي
-        model_path = os.path.join(os.path.dirname(__file__), 'yolov8n.pt')
-        if not os.path.exists(model_path):
-            # إذا لم يكن النموذج موجوداً، قم بتحميله
-            model = YOLO('yolov8n.pt')
-            model.save(model_path)
-        else:
-            model = YOLO(model_path)
-        return model
+        processor = DetrImageProcessor.from_pretrained("facebook/detr-resnet-50")
+        model = DetrForObjectDetection.from_pretrained("facebook/detr-resnet-50")
+        return processor, model
     except Exception as e:
         st.error(f"خطأ في تحميل النموذج: {e}")
-        return None
+        return None, None
 
 def detect_car(image_bytes):
     """
-    كشف وتحليل السيارة في الصورة باستخدام YOLOv8
+    كشف وتحليل السيارة في الصورة باستخدام DETR
     """
     try:
         # تحميل النموذج
-        model = load_model()
-        if model is None:
+        processor, model = load_model()
+        if processor is None or model is None:
             return None, "لم يتمكن من تحميل نموذج الكشف"
 
-        # تحويل الصورة إلى تنسيق OpenCV
+        # تحويل الصورة إلى تنسيق PIL
         image = Image.open(io.BytesIO(image_bytes))
-        img_cv = np.array(image)
         
-        # الكشف عن الكائنات في الصورة
-        results = model(img_cv)
+        # معالجة الصورة
+        inputs = processor(images=image, return_tensors="pt")
+        outputs = model(**inputs)
+        
+        # تحويل النتائج إلى تنسيق قابل للقراءة
+        target_sizes = torch.tensor([image.size[::-1]])
+        results = processor.post_process_object_detection(outputs, target_sizes=target_sizes, threshold=0.5)[0]
         
         # البحث عن السيارات في النتائج
         cars = []
-        for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                if int(box.cls) == 2:  # class 2 هو السيارة في YOLOv8
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()
-                    confidence = box.conf[0].item()
-                    if confidence > 0.5:  # ثقة أعلى من 50%
-                        cars.append({
-                            'bbox': [x1, y1, x2, y2],
-                            'confidence': confidence
-                        })
+        for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
+            if model.config.id2label[label.item()] == "car":
+                cars.append({
+                    'bbox': box.tolist(),
+                    'confidence': score.item()
+                })
         
         if not cars:
             return None, "لم يتم العثور على سيارة في الصورة"
@@ -61,7 +53,6 @@ def detect_car(image_bytes):
         
         # رسم المربع المحيط بالسيارة
         x1, y1, x2, y2 = best_car['bbox']
-        # استخدام PIL بدلاً من OpenCV للرسم
         draw = ImageDraw.Draw(image)
         draw.rectangle([(x1, y1), (x2, y2)], outline="green", width=2)
         
