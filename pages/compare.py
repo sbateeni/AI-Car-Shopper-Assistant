@@ -243,4 +243,62 @@ if len(detected_cars) >= 2:
         except Exception as e:
             st.error(f"خطأ في مقارنة السيارات: {str(e)}")
 else:
-    st.warning("يجب أن يكون هناك سيارة على الأقل للمقارنة") 
+    st.warning("يجب أن يكون هناك سيارة على الأقل للمقارنة")
+
+def compare_cars(car1, car2, language):
+    try:
+        # Prepare the comparison prompt
+        comparison_prompt = f"""قم بمقارنة السيارتين التاليتين بتنسيق JSON:
+        السيارة الأولى: {car1['details']['year']} {car1['details']['brand']} {car1['details']['model']}
+        السيارة الثانية: {car2['details']['year']} {car2['details']['brand']} {car2['details']['model']}
+        
+        قم بإرجاع النتيجة بتنسيق JSON بالشكل التالي:
+        {{
+            "general_comparison": {{
+                "winner": "السيارة الفائزة في المقارنة العامة",
+                "reason": "سبب الفوز"
+            }},
+            "performance": {{
+                "car1": "أداء السيارة الأولى",
+                "car2": "أداء السيارة الثانية",
+                "winner": "السيارة الأفضل في الأداء",
+                "reason": "سبب التفوق في الأداء"
+            }},
+            "technical_specs": {{
+                "car1": "المواصفات الفنية للسيارة الأولى",
+                "car2": "المواصفات الفنية للسيارة الثانية",
+                "winner": "السيارة الأفضل في المواصفات الفنية",
+                "reason": "سبب التفوق في المواصفات الفنية"
+            }},
+            "features": {{
+                "car1": "مميزات السيارة الأولى",
+                "car2": "مميزات السيارة الثانية",
+                "winner": "السيارة الأفضل في المميزات",
+                "reason": "سبب التفوق في المميزات"
+            }},
+            "recommendation": {{
+                "best_choice": "السيارة الموصى بها",
+                "reason": "سبب التوصية",
+                "suitable_for": "مناسبة لمن؟"
+            }}
+        }}
+        
+        يجب أن تكون جميع الإجابات باللغة العربية.
+        قم بإرجاع كائن JSON فقط، بدون أي نص إضافي قبل أو بعد الكائن."""
+        
+        # Generate comparison
+        response = model.generate_content(comparison_prompt)
+        
+        # Clean and parse the response
+        response_text = clean_json_string(response.text)
+        comparison = json.loads(response_text)
+        
+        return comparison
+        
+    except json.JSONDecodeError as e:
+        st.error(f"خطأ في تحليل استجابة المقارنة: {str(e)}")
+        st.error(f"الاستجابة الخام: {response.text}")
+        return None
+    except Exception as e:
+        st.error(f"خطأ في مقارنة السيارات: {str(e)}")
+        return None 
