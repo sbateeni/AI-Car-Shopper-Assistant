@@ -175,17 +175,10 @@ with col1:
     st.subheader(texts[st.session_state.language]["upload"])
     uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png"])
 
-with col2:
-    st.subheader(texts[st.session_state.language]["camera"])
-    camera_image = st.camera_input("")
-
 # Process the image
-if uploaded_file or camera_image:
-    # Get the image from either source
-    if uploaded_file:
-        image = Image.open(uploaded_file)
-    else:
-        image = Image.open(camera_image)
+if uploaded_file:
+    # Get the image
+    image = Image.open(uploaded_file)
     
     # Display the image
     st.image(image, caption="Uploaded Image", use_container_width=True)
@@ -257,11 +250,13 @@ if uploaded_file or camera_image:
                 st.write(f"**{texts[st.session_state.language]['tech']}:**")
                 for feature in features["technology_features"]:
                     st.write(f"- {feature}")
-                    
+                
                 # Add comparison button
                 if st.button(texts[st.session_state.language]["compare"]):
                     st.switch_page("pages/compare.py")
-
+                
                 # Add identify button
                 if st.button(texts[st.session_state.language]["identify"]):
-                    st.switch_page("pages/identify.py") 
+                    st.switch_page("pages/identify.py")
+    else:
+        st.warning(texts[st.session_state.language]["no_image"]) 
