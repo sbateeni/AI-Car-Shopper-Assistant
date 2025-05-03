@@ -173,56 +173,35 @@ if 'viewing_car' in st.session_state:
     
     st.stop()
 
-# Select cars to compare
-st.subheader(texts[language]["select_cars"])
-col1, col2 = st.columns(2)
-
-with col1:
-    st.write(texts[language]["select_first"])
-    car1_index = st.selectbox(
-        "",
-        range(len(detected_cars)),
-        format_func=lambda x: f"{detected_cars[x]['details']['brand']} {detected_cars[x]['details']['model']} ({detected_cars[x]['details']['year']})",
-        key="car1_select"
-    )
-
-with col2:
-    st.write(texts[language]["select_second"])
-    car2_index = st.selectbox(
-        "",
-        range(len(detected_cars)),
-        format_func=lambda x: f"{detected_cars[x]['details']['brand']} {detected_cars[x]['details']['model']} ({detected_cars[x]['details']['year']})",
-        key="car2_select"
-    )
-
 # Compare button
-if st.button(texts[language]["compare"]):
-    if car1_index != car2_index:
+if len(detected_cars) >= 2:
+    if st.button(texts[language]["compare"]):
         try:
-            car1 = detected_cars[car1_index]
-            car2 = detected_cars[car2_index]
+            car1 = detected_cars[0]
+            car2 = detected_cars[1]
             
             # Get specifications for both cars
-            prompt = f"""Compare the following two cars and provide a detailed analysis:
+            prompt = f"""قارن بين السيارتين التاليتين وقدم تحليلاً مفصلاً:
             
-            Car 1: {car1['details']['year']} {car1['details']['brand']} {car1['details']['model']}
-            Car 2: {car2['details']['year']} {car2['details']['brand']} {car2['details']['model']}
+            السيارة الأولى: {car1['details']['year']} {car1['details']['brand']} {car1['details']['model']}
+            السيارة الثانية: {car2['details']['year']} {car2['details']['brand']} {car2['details']['model']}
             
-            Provide the comparison in the following format:
+            قدم المقارنة بالتنسيق التالي:
             {{
-                "overall_comparison": "string",
-                "performance_comparison": "string",
-                "technical_comparison": "string",
+                "overall_comparison": "مقارنة عامة بين السيارتين",
+                "performance_comparison": "مقارنة الأداء",
+                "technical_comparison": "مقارنة المواصفات الفنية",
                 "pros_and_cons": {{
-                    "car1_pros": ["string"],
-                    "car1_cons": ["string"],
-                    "car2_pros": ["string"],
-                    "car2_cons": ["string"]
+                    "car1_pros": ["مميزات السيارة الأولى"],
+                    "car1_cons": ["عيوب السيارة الأولى"],
+                    "car2_pros": ["مميزات السيارة الثانية"],
+                    "car2_cons": ["عيوب السيارة الثانية"]
                 }},
-                "recommendation": "string"
+                "recommendation": "توصية عامة"
             }}
             
-            Only return the JSON object, nothing else. Do not include any text before or after the JSON."""
+            يجب أن تكون جميع الإجابات باللغة العربية.
+            قم بإرجاع كائن JSON فقط، بدون أي نص إضافي قبل أو بعد الكائن."""
             
             response = model.generate_content(prompt)
             comparison = json.loads(response.text.strip())
@@ -241,20 +220,20 @@ if st.button(texts[language]["compare"]):
             col1, col2 = st.columns(2)
             
             with col1:
-                st.write(f"**{car1['details']['brand']} {car1['details']['model']} Pros:**")
+                st.write(f"**مميزات {car1['details']['brand']} {car1['details']['model']}:**")
                 for pro in comparison["pros_and_cons"]["car1_pros"]:
                     st.write(f"✅ {pro}")
                 
-                st.write(f"**{car1['details']['brand']} {car1['details']['model']} Cons:**")
+                st.write(f"**عيوب {car1['details']['brand']} {car1['details']['model']}:**")
                 for con in comparison["pros_and_cons"]["car1_cons"]:
                     st.write(f"❌ {con}")
             
             with col2:
-                st.write(f"**{car2['details']['brand']} {car2['details']['model']} Pros:**")
+                st.write(f"**مميزات {car2['details']['brand']} {car2['details']['model']}:**")
                 for pro in comparison["pros_and_cons"]["car2_pros"]:
                     st.write(f"✅ {pro}")
                 
-                st.write(f"**{car2['details']['brand']} {car2['details']['model']} Cons:**")
+                st.write(f"**عيوب {car2['details']['brand']} {car2['details']['model']}:**")
                 for con in comparison["pros_and_cons"]["car2_cons"]:
                     st.write(f"❌ {con}")
             
@@ -262,6 +241,6 @@ if st.button(texts[language]["compare"]):
             st.write(comparison["recommendation"])
             
         except Exception as e:
-            st.error(f"Error comparing cars: {str(e)}")
-    else:
-        st.error("Please select two different cars to compare") 
+            st.error(f"خطأ في مقارنة السيارات: {str(e)}")
+else:
+    st.warning("يجب أن يكون هناك سيارة على الأقل للمقارنة") 

@@ -50,7 +50,8 @@ texts = {
         "price": "Price Range",
         "safety": "Safety Features",
         "comfort": "Comfort Features",
-        "tech": "Technology Features"
+        "tech": "Technology Features",
+        "identify": "Identify Car"
     },
     "Arabic": {
         "title": "كاشف نوع السيارة",
@@ -67,7 +68,8 @@ texts = {
         "price": "نطاق السعر",
         "safety": "مميزات الأمان",
         "comfort": "مميزات الراحة",
-        "tech": "المميزات التكنولوجية"
+        "tech": "المميزات التكنولوجية",
+        "identify": "تحديد السيارة"
     }
 }
 
@@ -95,14 +97,14 @@ def process_car(image, language):
         img_byte_arr = img_byte_arr.getvalue()
         
         # Detect car details
-        detection_prompt = """Analyze this car image and provide the following information in JSON format:
+        detection_prompt = """قم بتحليل صورة السيارة وقدم المعلومات التالية بتنسيق JSON:
         {
-            "brand": "car brand",
-            "model": "car model",
-            "year": "year of manufacture",
-            "type": "car type (SUV, Sedan, etc.)"
+            "brand": "ماركة السيارة",
+            "model": "موديل السيارة",
+            "year": "سنة التصنيع",
+            "type": "نوع السيارة (SUV, Sedan, إلخ)"
         }
-        Only return the JSON object, nothing else. Do not include any text before or after the JSON."""
+        قم بإرجاع كائن JSON فقط، بدون أي نص إضافي قبل أو بعد الكائن."""
         
         response = vision_model.generate_content([
             detection_prompt,
@@ -114,42 +116,43 @@ def process_car(image, language):
         car_details = json.loads(response_text)
         
         # Get detailed specifications
-        specs_prompt = f"""Generate detailed specifications for a {car_details['year']} {car_details['brand']} {car_details['model']} in JSON format:
+        specs_prompt = f"""قم بإنشاء مواصفات تفصيلية لسيارة {car_details['year']} {car_details['brand']} {car_details['model']} بتنسيق JSON:
         {{
             "basic_info": {{
-                "brand": "string",
-                "model": "string",
-                "year": "number",
-                "type": "string"
+                "brand": "ماركة السيارة",
+                "model": "موديل السيارة",
+                "year": "سنة التصنيع",
+                "type": "نوع السيارة"
             }},
             "performance": {{
-                "fuel_consumption": "string",
-                "engine_size": "string",
-                "cylinders": "number",
-                "transmission": "string",
-                "fuel_type": "string",
-                "horsepower": "number",
-                "torque": "string",
-                "top_speed": "string",
-                "acceleration": "string"
+                "fuel_consumption": "استهلاك الوقود",
+                "engine_size": "حجم المحرك",
+                "cylinders": "عدد الأسطوانات",
+                "transmission": "نوع ناقل الحركة",
+                "fuel_type": "نوع الوقود",
+                "horsepower": "قوة المحرك",
+                "torque": "عزم الدوران",
+                "top_speed": "السرعة القصوى",
+                "acceleration": "التسارع"
             }},
             "technical_specs": {{
-                "length": "string",
-                "width": "string",
-                "height": "string",
-                "wheelbase": "string",
-                "weight": "string",
-                "seating_capacity": "number",
-                "trunk_capacity": "string"
+                "length": "الطول",
+                "width": "العرض",
+                "height": "الارتفاع",
+                "wheelbase": "قاعدة العجلات",
+                "weight": "الوزن",
+                "seating_capacity": "سعة المقاعد",
+                "trunk_capacity": "سعة الصندوق"
             }},
             "features": {{
-                "price_range": "string",
-                "safety_features": ["string"],
-                "comfort_features": ["string"],
-                "technology_features": ["string"]
+                "price_range": "نطاق السعر",
+                "safety_features": ["مميزات الأمان"],
+                "comfort_features": ["مميزات الراحة"],
+                "technology_features": ["المميزات التكنولوجية"]
             }}
         }}
-        Only return the JSON object, nothing else. Do not include any text before or after the JSON."""
+        يجب أن تكون جميع الإجابات باللغة العربية.
+        قم بإرجاع كائن JSON فقط، بدون أي نص إضافي قبل أو بعد الكائن."""
         
         response = text_model.generate_content(specs_prompt)
         specs_text = clean_json_string(response.text)
@@ -158,7 +161,7 @@ def process_car(image, language):
         return car_details, specs
         
     except Exception as e:
-        st.error(f"Error processing image: {str(e)}")
+        st.error(f"خطأ في معالجة الصورة: {str(e)}")
         return None, None
 
 # Title and description
@@ -257,4 +260,8 @@ if uploaded_file or camera_image:
                     
                 # Add comparison button
                 if st.button(texts[st.session_state.language]["compare"]):
-                    st.switch_page("pages/compare.py") 
+                    st.switch_page("pages/compare.py")
+
+                # Add identify button
+                if st.button(texts[st.session_state.language]["identify"]):
+                    st.switch_page("pages/identify.py") 

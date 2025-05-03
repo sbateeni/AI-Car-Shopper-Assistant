@@ -21,6 +21,11 @@ def save_car(car_data):
     
     # Convert image to bytes
     img_byte_arr = BytesIO()
+    
+    # Convert RGBA to RGB if necessary
+    if car_data['image'].mode == 'RGBA':
+        car_data['image'] = car_data['image'].convert('RGB')
+    
     car_data['image'].save(img_byte_arr, format='JPEG')
     img_byte_arr = img_byte_arr.getvalue()
     
@@ -28,40 +33,31 @@ def save_car(car_data):
     details_json = json.dumps(car_data['details'])
     specs_json = json.dumps(car_data['specs'])
     
-    c.execute("INSERT INTO cars (details, specs, image) VALUES (?, ?, ?)",
-              (details_json, specs_json, img_byte_arr))
+    c.execute('''INSERT INTO cars (details, specs, image)
+                 VALUES (?, ?, ?)''', (details_json, specs_json, img_byte_arr))
     conn.commit()
     conn.close()
 
 def get_all_cars():
     conn = sqlite3.connect('cars.db')
     c = conn.cursor()
-    c.execute("SELECT * FROM cars")
-    rows = c.fetchall()
-    conn.close()
-    
+    c.execute('SELECT * FROM cars')
     cars = []
-    for row in rows:
-        # Convert JSON strings back to dictionaries
-        details = json.loads(row[1])
-        specs = json.loads(row[2])
-        
-        # Convert image bytes back to PIL Image
-        img = Image.open(BytesIO(row[3]))
-        
-        cars.append({
+    for row in c.fetchall():
+        car = {
             'id': row[0],
-            'details': details,
-            'specs': specs,
-            'image': img
-        })
-    
+            'details': json.loads(row[1]),
+            'specs': json.loads(row[2]),
+            'image': Image.open(BytesIO(row[3]))
+        }
+        cars.append(car)
+    conn.close()
     return cars
 
 def delete_car(car_id):
     conn = sqlite3.connect('cars.db')
     c = conn.cursor()
-    c.execute("DELETE FROM cars WHERE id = ?", (car_id,))
+    c.execute('DELETE FROM cars WHERE id = ?', (car_id,))
     conn.commit()
     conn.close()
 
