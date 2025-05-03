@@ -4,6 +4,7 @@ from PIL import Image
 import io
 import os
 import json
+import re
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -16,8 +17,8 @@ if not api_key:
     st.stop()
 
 genai.configure(api_key=api_key)
-vision_model = genai.GenerativeModel('models/gemini-2.0-flash-001')
-text_model = genai.GenerativeModel('models/gemini-2.0-flash-001')
+vision_model = genai.GenerativeModel('gemini-pro-vision')
+text_model = genai.GenerativeModel('gemini-pro')
 
 # Set page configuration
 st.set_page_config(
@@ -40,13 +41,13 @@ def detect_car(image):
         
         # Prepare the prompt
         prompt = """
-        Analyze this car image and provide the following information:
-        1. Make (brand)
-        2. Model
-        3. Year (if possible to determine)
-        4. Type of vehicle (SUV, Sedan, Hatchback, etc.)
+        Analyze this car image and provide the following information in a structured format:
+        Make: [brand]
+        Model: [model]
+        Year: [year]
+        Type: [vehicle type]
         
-        Format your response as a clear, concise description.
+        Be specific about the model and year if possible.
         """
         
         # Get response from Gemini
@@ -55,6 +56,42 @@ def detect_car(image):
     except Exception as e:
         st.error(f"Error processing image: {str(e)}")
         return None
+
+# Function to extract car details from text
+def extract_car_details(text):
+    details = {
+        'brand': None,
+        'model': None,
+        'year': None,
+        'type': None
+    }
+    
+    # Extract brand
+    brand_match = re.search(r'Make:\s*([^\n]+)', text, re.IGNORECASE)
+    if brand_match:
+        details['brand'] = brand_match.group(1).strip()
+    
+    # Extract model
+    model_match = re.search(r'Model:\s*([^\n]+)', text, re.IGNORECASE)
+    if model_match:
+        details['model'] = model_match.group(1).strip()
+    
+    # Extract year
+    year_match = re.search(r'Year:\s*(\d{4})', text, re.IGNORECASE)
+    if year_match:
+        details['year'] = int(year_match.group(1))
+    else:
+        # Try to find year in text
+        year_match = re.search(r'(\d{4})', text)
+        if year_match:
+            details['year'] = int(year_match.group(1))
+    
+    # Extract type
+    type_match = re.search(r'Type:\s*([^\n]+)', text, re.IGNORECASE)
+    if type_match:
+        details['type'] = type_match.group(1).strip()
+    
+    return details
 
 # Function to get vehicle specifications
 def get_vehicle_specs(brand: str, model: str, year: int):
@@ -70,6 +107,10 @@ def get_vehicle_specs(brand: str, model: str, year: int):
         6. Number of cylinders
         7. Transmission type
         8. Fuel type
+        9. Horsepower
+        10. Torque (Nm)
+        11. Top speed (km/h)
+        12. Acceleration 0-100 km/h (seconds)
         
         Format the response as a JSON object with this structure:
         {{
@@ -80,13 +121,18 @@ def get_vehicle_specs(brand: str, model: str, year: int):
             "engine_size": integer,
             "cylinders": integer,
             "transmission": "string",
-            "fuel_type": "string"
+            "fuel_type": "string",
+            "horsepower": integer,
+            "torque": integer,
+            "top_speed": integer,
+            "acceleration": float
         }}
         
         Important:
         - Return ONLY the JSON object, no additional text
         - Use exact values for brand, model, and year as provided
         - Ensure all numeric values are actual numbers, not strings
+        - If any value is unknown, use null
         """
         
         response = text_model.generate_content(prompt)
@@ -147,22 +193,44 @@ if uploaded_file or camera_image:
                 st.subheader("Car Information")
                 st.write(car_info)
                 
-                # Extract brand, model, and year from the car_info
-                # This is a simple extraction - you might want to improve this
-                try:
-                    lines = car_info.split('\n')
-                    brand = lines[0].split(':')[-1].strip()
-                    model = lines[1].split(':')[-1].strip()
-                    year = int(lines[2].split(':')[-1].strip())
-                    
+                # Extract car details
+                car_details = extract_car_details(car_info)
+                
+                if car_details['brand'] and car_details['model']:
                     # Get detailed specifications
                     with st.spinner("Getting detailed specifications..."):
-                        specs = get_vehicle_specs(brand, model, year)
+                        specs = get_vehicle_specs(
+                            car_details['brand'],
+                            car_details['model'],
+                            car_details['year'] or 2023  # Use current year if year not detected
+                        )
                         
                         if specs:
                             st.subheader("Detailed Specifications")
-                            st.json(specs)
-                except Exception as e:
+                            
+                            # Create a more readable display of specifications
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                st.write("**Basic Information**")
+                                st.write(f"Brand: {specs['brand']}")
+                                st.write(f"Model: {specs['model']}")
+                                st.write(f"Year: {specs['year']}")
+                                st.write(f"Type: {car_details['type'] or 'Unknown'}")
+                                
+                            with col2:
+                                st.write("**Performance**")
+                                st.write(f"Engine: {specs['engine_size']}cc, {specs['cylinders']} cylinders")
+                                st.write(f"Horsepower: {specs['horsepower']} HP")
+                                st.write(f"Torque: {specs['torque']} Nm")
+                                st.write(f"Top Speed: {specs['top_speed']} km/h")
+                                st.write(f"0-100 km/h: {specs['acceleration']} seconds")
+                            
+                            st.write("**Technical Details**")
+                            st.write(f"Transmission: {specs['transmission']}")
+                            st.write(f"Fuel Type: {specs['fuel_type']}")
+                            st.write(f"Fuel Consumption: {specs['fuel_consumption']} L/100km")
+                else:
                     st.warning("Could not extract enough information for detailed specifications")
             else:
                 st.error("Failed to process the image")
@@ -174,5 +242,5 @@ st.markdown("""
 2. Click the 'Detect Car Type' button
 3. Wait for the AI to analyze the image and provide:
    - Basic car information (make, model, year, type)
-   - Detailed specifications (fuel consumption, engine size, etc.)
+   - Detailed specifications (performance, technical details)
 """) 
