@@ -138,7 +138,28 @@ st.write(lang['description'])
 def process_car(image):
     try:
         # First, detect the car from the image
-        car_info = detect_car(image, vision_model)
+        prompt = """
+        Analyze this car image and provide the following information in a structured format:
+        Make: [brand]
+        Model: [model]
+        Year: [year]
+        Type: [vehicle type]
+
+        Be specific about the model and year if possible.
+        """
+        
+        if st.session_state.language == 'Arabic':
+            prompt = """
+            قم بتحليل صورة المركبة وقدم المعلومات التالية بتنسيق منظم:
+            الماركة: [brand]
+            الموديل: [model]
+            السنة: [year]
+            النوع: [vehicle type]
+
+        كن محدداً بشأن الموديل والسنة إذا أمكن.
+        """
+        
+        car_info = detect_car(image, vision_model, prompt)
         
         if car_info:
             st.success(lang['detection_complete'])
@@ -151,11 +172,59 @@ def process_car(image):
             if car_details['brand'] and car_details['model']:
                 # Get detailed specifications
                 with st.spinner(lang['analyzing']):
+                    prompt = f"""
+                    Please provide detailed specifications for a {car_details['year'] or 2023} {car_details['brand']} {car_details['model']}.
+                    Include:
+                    1. Brand
+                    2. Model
+                    3. Year
+                    4. Fuel consumption (liters/100km)
+                    5. Engine size (cc)
+                    6. Number of cylinders
+                    7. Transmission type
+                    8. Fuel type
+                    9. Horsepower
+                    10. Torque (Nm)
+                    11. Top speed (km/h)
+                    12. Acceleration 0-100 km/h (seconds)
+                    13. Price range (USD)
+                    14. Safety features
+                    15. Comfort features
+                    16. Technology features
+                    
+                    Format the response as a JSON object.
+                    """
+                    
+                    if st.session_state.language == 'Arabic':
+                        prompt = f"""
+                        يرجى تقديم مواصفات تفصيلية لمركبة {car_details['year'] or 2023} {car_details['brand']} {car_details['model']}.
+                        قم بتضمين:
+                        1. الماركة
+                        2. الموديل
+                        3. السنة
+                        4. استهلاك الوقود (لتر/100 كم)
+                        5. حجم المحرك (سي سي)
+                        6. عدد الأسطوانات
+                        7. نوع ناقل الحركة
+                        8. نوع الوقود
+                        9. القوة الحصانية
+                        10. عزم الدوران (نيوتن متر)
+                        11. السرعة القصوى (كم/ساعة)
+                        12. التسارع من 0-100 كم/ساعة (ثواني)
+                        13. نطاق السعر (دولار أمريكي)
+                        14. مميزات الأمان
+                        15. مميزات الراحة
+                        16. المميزات التقنية
+                        
+                        قم بتنسيق الرد ككائن JSON.
+                        """
+                    
                     specs = get_vehicle_specs(
                         car_details['brand'],
                         car_details['model'],
-                        car_details['year'] or 2023,  # Use current year if year not detected
-                        text_model
+                        car_details['year'] or 2023,
+                        text_model,
+                        prompt
                     )
                     
                     if specs:
