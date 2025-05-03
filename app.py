@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import os
 import json
 import re
+from src.database import save_car, get_all_cars
 
 # Load environment variables
 load_dotenv()
@@ -192,19 +193,15 @@ if uploaded_file or camera_image:
             car_details, specs = process_car(image, st.session_state.language)
             
             if car_details and specs:
-                # Store car details in session state for comparison
+                # Store car details
                 car_data = {
                     'details': car_details,
                     'specs': specs,
                     'image': image
                 }
                 
-                # Initialize detected_cars if not exists
-                if 'detected_cars' not in st.session_state:
-                    st.session_state.detected_cars = []
-                
-                # Add car to detected cars
-                st.session_state.detected_cars.append(car_data)
+                # Save to database
+                save_car(car_data)
                 
                 # Display specifications
                 st.subheader(texts[st.session_state.language]["specs"])
