@@ -99,7 +99,7 @@ if app_mode == "📊 مقارنة عدة سيارات":
             with cols[i]:
                 try:
                     car_image = base64_to_image(car["image"])
-                    st.image(car_image, caption=f"سيارة {i+1}", use_container_width=True)
+                    st.image(car_image, caption=f"سيارة {i+1}", width=UI_SETTINGS["image_display"]["processed_width"])
                     st.markdown(car["info"])
                     if st.button(f"🗑️ إزالة السيارة {i+1}", key=f"remove_{car['id']}"):
                         st.session_state.cars_to_compare.pop(i)
@@ -147,7 +147,7 @@ if app_mode == "📊 مقارنة عدة سيارات":
                     for i, car in enumerate(st.session_state.cars_to_compare):
                         with res_cols[i]:
                             car_image = base64_to_image(car["image"])
-                            st.image(car_image, caption=f"سيارة {i+1}", use_container_width=True)
+                            st.image(car_image, caption=f"سيارة {i+1}", width=UI_SETTINGS["image_display"]["processed_width"])
                             st.markdown(f"**المعلومات:**\n {car['info']}")
                             st.success(f"**السعر المقدر:**\n {car.get('market_price', 'غير متوفر')}")
 
