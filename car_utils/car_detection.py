@@ -27,9 +27,19 @@ def analyze_car(image_bytes):
         # تحويل الصورة إلى تنسيق PIL
         image = Image.open(io.BytesIO(image_bytes))
         
+        # تحويل الصورة إلى RGB إذا كانت في تنسيق آخر
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
         # معالجة الصورة
         inputs = processor(images=image, return_tensors="pt")
-        outputs = model(**inputs)
+        
+        # تحويل النموذج إلى وضع التقييم
+        model.eval()
+        
+        # تحليل الصورة
+        with torch.no_grad():
+            outputs = model(**inputs)
         
         # تحليل النتائج
         logits = outputs.logits
