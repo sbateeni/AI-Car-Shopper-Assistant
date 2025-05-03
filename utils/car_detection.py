@@ -1,14 +1,22 @@
 from ultralytics import YOLO
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 import io
 import streamlit as st
+import os
 
 def load_model():
     """تحميل نموذج YOLOv8"""
     try:
-        model = YOLO('yolov8n.pt')
+        # تحميل النموذج من المسار المحلي
+        model_path = os.path.join(os.path.dirname(__file__), 'yolov8n.pt')
+        if not os.path.exists(model_path):
+            # إذا لم يكن النموذج موجوداً، قم بتحميله
+            model = YOLO('yolov8n.pt')
+            model.save(model_path)
+        else:
+            model = YOLO(model_path)
         return model
     except Exception as e:
         st.error(f"خطأ في تحميل النموذج: {e}")
@@ -53,15 +61,14 @@ def detect_car(image_bytes):
         
         # رسم المربع المحيط بالسيارة
         x1, y1, x2, y2 = best_car['bbox']
-        cv2.rectangle(img_cv, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-        
-        # تحويل الصورة المعالجة إلى تنسيق PIL
-        processed_image = Image.fromarray(img_cv)
+        # استخدام PIL بدلاً من OpenCV للرسم
+        draw = ImageDraw.Draw(image)
+        draw.rectangle([(x1, y1), (x2, y2)], outline="green", width=2)
         
         # تحضير وصف للسيارة
         car_description = f"تم الكشف عن سيارة بثقة {best_car['confidence']:.2f}"
         
-        return processed_image, car_description
+        return image, car_description
         
     except Exception as e:
         st.error(f"خطأ في تحليل الصورة: {e}")
