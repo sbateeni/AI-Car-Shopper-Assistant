@@ -193,11 +193,18 @@ if uploaded_file or camera_image:
             
             if car_details and specs:
                 # Store car details in session state for comparison
-                st.session_state.current_car = {
+                car_data = {
                     'details': car_details,
                     'specs': specs,
                     'image': image
                 }
+                
+                # Initialize detected_cars if not exists
+                if 'detected_cars' not in st.session_state:
+                    st.session_state.detected_cars = []
+                
+                # Add car to detected cars
+                st.session_state.detected_cars.append(car_data)
                 
                 # Display specifications
                 st.subheader(texts[st.session_state.language]["specs"])
