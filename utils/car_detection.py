@@ -1,14 +1,14 @@
-from transformers import AutoImageProcessor, AutoModelForImageClassification
+from transformers import ViTImageProcessor, ViTForImageClassification
 import torch
 from PIL import Image
 import io
 import streamlit as st
 
 def load_model():
-    """تحميل نموذج Swin Transformer من Hugging Face"""
+    """تحميل نموذج ViT من Hugging Face"""
     try:
-        processor = AutoImageProcessor.from_pretrained("microsoft/swin-base-patch4-window7-224-in22k")
-        model = AutoModelForImageClassification.from_pretrained("microsoft/swin-base-patch4-window7-224-in22k")
+        processor = ViTImageProcessor.from_pretrained("google/vit-base-patch16-224")
+        model = ViTForImageClassification.from_pretrained("google/vit-base-patch16-224")
         return processor, model
     except Exception as e:
         st.error(f"خطأ في تحميل النموذج: {e}")
@@ -16,7 +16,7 @@ def load_model():
 
 def detect_car(image_bytes):
     """
-    تحليل الصورة باستخدام Swin Transformer
+    تحليل الصورة باستخدام ViT
     """
     try:
         # تحميل النموذج
