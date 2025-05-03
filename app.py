@@ -1,245 +1,99 @@
 import streamlit as st
-from car_utils import (
-    configure_api,
-    image_to_base64,
-    base64_to_image,
-    detect_and_blur_plate,
-    call_gemini_vision,
-    call_gemini_text,
-    COUNTRIES,
-    UI_SETTINGS
-)
-from car_utils.car_detection import analyze_car
+import google.generativeai as genai
 from PIL import Image
 import io
+import os
+from dotenv import load_dotenv
 
-# --- إعدادات أولية ---
-if not configure_api():
+# Load environment variables
+load_dotenv()
+
+# Configure Gemini API
+api_key = os.getenv("GEMINI_API_KEY")
+if not api_key:
+    st.error("Please set your GEMINI_API_KEY in the .env file")
     st.stop()
 
-# --- إعدادات واجهة المستخدم ---
-st.set_page_config(**UI_SETTINGS["page_config"])
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel('gemini-pro-vision')
 
-# --- إعدادات عامة (في الشريط الجانبي) ---
-with st.sidebar:
-    st.header("⚙️ الإعدادات")
-    selected_country = st.selectbox("اختر دولتك:", COUNTRIES)
+# Set page configuration
+st.set_page_config(
+    page_title="Car Type Detector",
+    page_icon="🚗",
+    layout="centered"
+)
 
-    st.header("🚦 وضع التشغيل")
-    app_mode = st.radio("اختر وضع التشغيل:", ["📊 مقارنة عدة سيارات", "✔️ تقييم سيارة واحدة"])
+# Title and description
+st.title("🚗 Car Type Detector")
+st.write("Upload an image or use your camera to detect the type of car")
 
-    st.info("🔒 سيتم تمويه لوحات الترخيص تلقائيًا لحماية الخصوصية.")
+# Function to process image with Gemini API
+def detect_car(image):
+    try:
+        # Convert image to bytes
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='JPEG')
+        img_byte_arr = img_byte_arr.getvalue()
+        
+        # Prepare the prompt
+        prompt = """
+        Analyze this car image and provide the following information:
+        1. Make (brand)
+        2. Model
+        3. Year (if possible to determine)
+        4. Type of vehicle (SUV, Sedan, Hatchback, etc.)
+        
+        Format your response as a clear, concise description.
+        """
+        
+        # Get response from Gemini
+        response = model.generate_content([prompt, Image.open(io.BytesIO(img_byte_arr))])
+        return response.text
+    except Exception as e:
+        st.error(f"Error processing image: {str(e)}")
+        return None
 
-# --- إدارة الحالة لتخزين السيارات المقارنة ---
-if 'cars_to_compare' not in st.session_state:
-    st.session_state.cars_to_compare = []
+# Create two columns for upload and camera options
+col1, col2 = st.columns(2)
 
-# --- منطق وضع المقارنة ---
-if app_mode == "📊 مقارنة عدة سيارات":
-    st.header("📊 مقارنة عدة سيارات")
-    st.write("أضف صور السيارات التي تريد مقارنتها:")
+with col1:
+    st.subheader("Upload Image")
+    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
-    input_method = st.radio("اختر طريقة إدخال الصورة:", ["📸 التقاط صورة", "📁 رفع صورة"], label_visibility="visible")
-    
-    if input_method == "📸 التقاط صورة":
-        uploaded_file = st.camera_input("📸 التقط صورة لسيارة جديدة للمقارنة", key=f"compare_cam_{len(st.session_state.cars_to_compare)}")
+with col2:
+    st.subheader("Use Camera")
+    camera_image = st.camera_input("Take a photo")
+
+# Process the image
+if uploaded_file or camera_image:
+    # Get the image from either source
+    if uploaded_file:
+        image = Image.open(uploaded_file)
     else:
-        uploaded_file = st.file_uploader("📁 اختر صورة سيارة", type=['jpg', 'png', 'jpeg'], key=f"compare_upload_{len(st.session_state.cars_to_compare)}")
-
-    if uploaded_file is not None:
-        try:
-            # قراءة الصورة مباشرة من الملف
-            image = Image.open(uploaded_file)
-            # تحويل الصورة إلى تنسيق PNG
-            img_bytes = io.BytesIO()
-            image.save(img_bytes, format='PNG')
-            img_bytes = img_bytes.getvalue()
-            
-            st.image(img_bytes, caption="الصورة الأصلية", width=UI_SETTINGS["image_display"]["original_width"])
-
-            with st.spinner("⏳ جارٍ معالجة الصورة وتحليل السيارة..."):
-                # 1. تحليل السيارة
-                analyzed_image, car_description = analyze_car(img_bytes)
-                if analyzed_image is None:
-                    st.error(car_description)
-                    st.stop()
-                
-                st.image(analyzed_image, caption="تم تحليل السيارة", width=UI_SETTINGS["image_display"]["processed_width"])
-                st.info(car_description)
-
-                # 2. تمويه اللوحة
-                blurred_image = detect_and_blur_plate(img_bytes)
-                if blurred_image is None:
-                    st.error("حدث خطأ أثناء تمويه لوحة الترخيص")
-                    st.stop()
-                st.image(blurred_image, caption="الصورة المعالجة (اللوحة مموهة)", width=UI_SETTINGS["image_display"]["processed_width"])
-
-                # 3. استدعاء Gemini للتحليل التفصيلي
-                vision_prompt = f"""حلل هذه الصورة لسيارة. 
-                المعلومات الأولية من التحليل: {car_description}
-                حدد الماركة، الموديل، والسنة التقديرية. 
-                اذكر المواصفات الرئيسية والعيوب الشائعة المعروفة. 
-                تجاهل لوحة الترخيص."""
-                blurred_base64 = image_to_base64(blurred_image)
-                car_info = call_gemini_vision(blurred_base64, vision_prompt)
-
-                car_data = {
-                    "id": f"car_{len(st.session_state.cars_to_compare)}",
-                    "image": blurred_base64,
-                    "info": car_info,
-                    "country": selected_country
-                }
-                st.session_state.cars_to_compare.append(car_data)
-                st.success("✅ تمت إضافة السيارة للمقارنة!")
-                st.rerun()
-        except Exception as e:
-            st.error(f"حدث خطأ أثناء معالجة الصورة: {e}")
-
-    # عرض السيارات المضافة للمقارنة
-    if st.session_state.cars_to_compare:
-        st.subheader("السيارات المضافة للمقارنة:")
-        cols = st.columns(len(st.session_state.cars_to_compare))
-        for i, car in enumerate(st.session_state.cars_to_compare):
-            with cols[i]:
-                try:
-                    car_image = base64_to_image(car["image"])
-                    st.image(car_image, caption=f"سيارة {i+1}", width=UI_SETTINGS["image_display"]["processed_width"])
-                    st.markdown(car["info"])
-                    if st.button(f"🗑️ إزالة السيارة {i+1}", key=f"remove_{car['id']}"):
-                        st.session_state.cars_to_compare.pop(i)
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"حدث خطأ أثناء عرض السيارة {i+1}: {e}")
-
-    # زر المقارنة النهائي
-    if len(st.session_state.cars_to_compare) >= 2:
-        if st.button("⚖️ قارن واختر الأفضل", key="compare_button"):
-            with st.spinner(f"⏳ جارٍ البحث عن الأسعار في {selected_country} وإجراء المقارنة..."):
-                try:
-                    # 1. جلب أسعار الوقود
-                    fuel_prompt = f"ما هي متوسط أسعار الوقود (بنزين وديزل) الحالية في {selected_country}؟"
-                    fuel_prices = call_gemini_text(fuel_prompt)
-                    st.session_state.fuel_prices = fuel_prices
-
-                    # 2. جلب أسعار السوق لكل سيارة
-                    comparison_input_parts = []
-                    for i, car in enumerate(st.session_state.cars_to_compare):
-                        car_name_year = f"السيارة {i+1} (المستخرجة من التحليل)"
-                        price_prompt = f"ما هو متوسط سعر السوق لسيارة مثل '{car_name_year}' في {car['country']}؟"
-                        market_price = call_gemini_text(price_prompt)
-                        car['market_price'] = market_price
-                        comparison_input_parts.append(f"**السيارة {i+1}:**\n{car['info']}\n*السعر المقدر:* {market_price}\n---")
-
-                    # 3. استدعاء Gemini للمقارنة النهائية
-                    comparison_prompt = f"""
-                    قارن بين السيارات التالية بناءً على المعلومات المتوفرة:
-                    {''.join(comparison_input_parts)}
-
-                    مع الأخذ في الاعتبار أسعار الوقود في {selected_country}:
-                    {st.session_state.fuel_prices}
-
-                    أي سيارة تنصح بشرائها ولماذا؟ ركز على الموثوقية، التكلفة الإجمالية (شراء + تشغيل)، والملاءمة للاستخدام.
-                    """
-                    final_recommendation = call_gemini_text(comparison_prompt)
-
-                    # 4. عرض النتائج
-                    st.subheader("🏁 نتيجة المقارنة")
-                    st.info(f"**أسعار الوقود في {selected_country}:**\n{st.session_state.fuel_prices}")
-
-                    st.markdown("**ملخص السيارات وأسعارها:**")
-                    res_cols = st.columns(len(st.session_state.cars_to_compare))
-                    for i, car in enumerate(st.session_state.cars_to_compare):
-                        with res_cols[i]:
-                            car_image = base64_to_image(car["image"])
-                            st.image(car_image, caption=f"سيارة {i+1}", width=UI_SETTINGS["image_display"]["processed_width"])
-                            st.markdown(f"**المعلومات:**\n {car['info']}")
-                            st.success(f"**السعر المقدر:**\n {car.get('market_price', 'غير متوفر')}")
-
-                    st.markdown("**💡 التوصية النهائية للذكاء الاصطناعي:**")
-                    st.success(final_recommendation)
-                except Exception as e:
-                    st.error(f"حدث خطأ أثناء المقارنة: {e}")
-
-# --- منطق وضع التقييم الفردي ---
-elif app_mode == "✔️ تقييم سيارة واحدة":
-    st.header("✔️ تقييم سيارة واحدة")
-    st.write("أضف صورة السيارة التي تريد تقييمها:")
-
-    input_method_single = st.radio("اختر طريقة إدخال الصورة:", ["📸 التقاط صورة", "📁 رفع صورة"], key="single_input_method", label_visibility="visible")
+        image = Image.open(camera_image)
     
-    if input_method_single == "📸 التقاط صورة":
-        uploaded_file_single = st.camera_input("📸 التقط صورة السيارة", key="single_cam")
-    else:
-        uploaded_file_single = st.file_uploader("📁 اختر صورة السيارة", type=['jpg', 'png', 'jpeg'], key="single_upload")
-
-    if uploaded_file_single is not None:
-        try:
-            # قراءة الصورة مباشرة من الملف
-            image = Image.open(uploaded_file_single)
-            # تحويل الصورة إلى تنسيق PNG
-            img_bytes = io.BytesIO()
-            image.save(img_bytes, format='PNG')
-            img_bytes = img_bytes.getvalue()
+    # Display the image
+    st.image(image, caption="Uploaded Image", use_container_width=True)
+    
+    # Process button
+    if st.button("Detect Car Type"):
+        with st.spinner("Analyzing image..."):
+            result = detect_car(image)
             
-            st.image(img_bytes, caption="الصورة الأصلية", width=UI_SETTINGS["image_display"]["single_car_width"])
+            if result:
+                st.success("Analysis complete!")
+                # Display results
+                st.subheader("Detection Results")
+                st.write(result)
+            else:
+                st.error("Failed to process the image")
 
-            if st.button("🧐 قيّم هذه السيارة", key="evaluate_button"):
-                with st.spinner("⏳ جارٍ تحليل السيارة والبحث عن المعلومات..."):
-                    # 1. الكشف عن السيارة
-                    detected_image, car_description = analyze_car(img_bytes)
-                    if detected_image is None:
-                        st.error(car_description)
-                        st.stop()
-                    
-                    st.image(detected_image, caption="تم الكشف عن السيارة", width=UI_SETTINGS["image_display"]["single_car_width"])
-                    st.info(car_description)
-
-                    # 2. تمويه اللوحة
-                    blurred_image = detect_and_blur_plate(img_bytes)
-                    if blurred_image is None:
-                        st.error("حدث خطأ أثناء تمويه لوحة الترخيص")
-                        st.stop()
-                    st.image(blurred_image, caption="الصورة المعالجة (اللوحة مموهة)", width=UI_SETTINGS["image_display"]["single_car_width"])
-
-                    # 3. استدعاء Gemini للتحليل التفصيلي
-                    vision_prompt = "حلل هذه الصورة لسيارة. حدد الماركة، الموديل، والسنة التقديرية. اذكر المواصفات الرئيسية والعيوب الشائعة المعروفة. تجاهل لوحة الترخيص."
-                    blurred_base64 = image_to_base64(blurred_image)
-                    car_info = call_gemini_vision(blurred_base64, vision_prompt)
-
-                    car_name_year_single = "السيارة المفردة (المستخرجة من التحليل)"
-
-                    # 4. جلب سعر السوق
-                    price_prompt_single = f"ما هو متوسط سعر السوق لسيارة مثل '{car_name_year_single}' في {selected_country}؟"
-                    market_price_single = call_gemini_text(price_prompt_single)
-
-                    # 5. جلب أسعار الوقود
-                    fuel_prompt_single = f"ما هي متوسط أسعار الوقود (بنزين وديزل) الحالية في {selected_country}؟"
-                    fuel_prices_single = call_gemini_text(fuel_prompt_single)
-
-                    # 6. استدعاء Gemini لتقديم النصح والتقييم
-                    advice_prompt = f"""
-                    حلل السيارة التالية:
-                    {car_info}
-
-                    معلومات إضافية:
-                    - الدولة: {selected_country}
-                    - متوسط سعر السوق المقدر: {market_price_single}
-                    - أسعار الوقود الحالية: {fuel_prices_single}
-
-                    بناءً على كل هذه العوامل (المواصفات، العيوب، السعر، تكلفة الوقود)، ما مدى نصيحتك بشراء هذه السيارة؟ قدم تقييمًا من 10 (حيث 10 هي الأعلى) مع تبرير واضح.
-                    """
-                    final_advice = call_gemini_text(advice_prompt)
-
-                    # عرض النتائج
-                    st.subheader("📝 نتيجة التقييم")
-                    st.markdown("**معلومات السيارة المحللة:**")
-                    st.write(car_info)
-                    st.info(f"**متوسط سعر السوق في {selected_country}:** {market_price_single}")
-                    st.info(f"**أسعار الوقود في {selected_country}:** {fuel_prices_single}")
-                    st.success(f"**💡 نصيحة الشراء (التقييم من 10):**\n{final_advice}")
-        except Exception as e:
-            st.error(f"حدث خطأ أثناء معالجة الصورة: {e}")
-
-# --- رسالة تذييل ---
-st.markdown("---")
-st.caption("تم التطوير باستخدام Streamlit و Python. يعتمد التحليل على YOLOv8 و Google Gemini API.") 
+# Add instructions
+st.markdown("""
+### Instructions:
+1. Either upload an image or use your camera to take a photo of a car
+2. Click the 'Detect Car Type' button
+3. Wait for the AI to analyze the image
+4. View the results showing the detected car type and other details
+""") 
