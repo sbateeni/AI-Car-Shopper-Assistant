@@ -114,10 +114,13 @@ if app_mode == "📊 مقارنة عدة سيارات":
     st.header("📊 مقارنة عدة سيارات")
     st.write("أضف صور السيارات التي تريد مقارنتها:")
 
-    uploaded_file = st.camera_input("📸 التقط صورة لسيارة جديدة للمقارنة", key=f"compare_cam_{len(st.session_state.cars_to_compare)}")
-    # أو استخدم رفع الملفات:
-    # uploaded_file = st.file_uploader("أو ارفع صورة سيارة", type=['jpg', 'png', 'jpeg'], key=f"compare_upload_{len(st.session_state.cars_to_compare)}")
-
+    # إضافة خيارات إدخال الصور
+    input_method = st.radio("اختر طريقة إدخال الصورة:", ["📸 التقاط صورة", "📁 رفع صورة"])
+    
+    if input_method == "📸 التقاط صورة":
+        uploaded_file = st.camera_input("📸 التقط صورة لسيارة جديدة للمقارنة", key=f"compare_cam_{len(st.session_state.cars_to_compare)}")
+    else:
+        uploaded_file = st.file_uploader("📁 اختر صورة سيارة", type=['jpg', 'png', 'jpeg'], key=f"compare_upload_{len(st.session_state.cars_to_compare)}")
 
     if uploaded_file is not None:
         img_bytes = uploaded_file.getvalue()
@@ -207,12 +210,15 @@ if app_mode == "📊 مقارنة عدة سيارات":
 # --- منطق وضع التقييم الفردي ---
 elif app_mode == "✔️ تقييم سيارة واحدة":
     st.header("✔️ تقييم سيارة واحدة")
-    st.write("التقط صورة للسيارة التي تريد تقييمها:")
+    st.write("أضف صورة السيارة التي تريد تقييمها:")
 
-    uploaded_file_single = st.camera_input("📸 التقط صورة السيارة", key="single_cam")
-    # أو استخدم رفع الملفات:
-    # uploaded_file_single = st.file_uploader("أو ارفع صورة السيارة", type=['jpg', 'png', 'jpeg'], key="single_upload")
-
+    # إضافة خيارات إدخال الصور
+    input_method_single = st.radio("اختر طريقة إدخال الصورة:", ["📸 التقاط صورة", "📁 رفع صورة"], key="single_input_method")
+    
+    if input_method_single == "📸 التقاط صورة":
+        uploaded_file_single = st.camera_input("📸 التقط صورة السيارة", key="single_cam")
+    else:
+        uploaded_file_single = st.file_uploader("📁 اختر صورة السيارة", type=['jpg', 'png', 'jpeg'], key="single_upload")
 
     if uploaded_file_single is not None:
         img_bytes_single = uploaded_file_single.getvalue()
