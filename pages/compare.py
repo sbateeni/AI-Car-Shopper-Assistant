@@ -245,6 +245,20 @@ if len(detected_cars) >= 2:
 else:
     st.warning("يجب أن يكون هناك سيارة على الأقل للمقارنة")
 
+def clean_json_string(json_str):
+    # Remove any text before or after the JSON object
+    json_match = re.search(r'\{.*\}', json_str, re.DOTALL)
+    if json_match:
+        json_str = json_match.group(0)
+    
+    # Remove any markdown formatting
+    json_str = json_str.replace('```json', '').replace('```', '')
+    
+    # Remove any whitespace at the beginning and end
+    json_str = json_str.strip()
+    
+    return json_str
+
 def compare_cars(car1, car2, language):
     try:
         # Prepare the comparison prompt
@@ -291,14 +305,19 @@ def compare_cars(car1, car2, language):
         
         # Clean and parse the response
         response_text = clean_json_string(response.text)
-        comparison = json.loads(response_text)
         
-        return comparison
+        # Debug: Print the cleaned response
+        st.write("الاستجابة بعد التنظيف:", response_text)
         
-    except json.JSONDecodeError as e:
-        st.error(f"خطأ في تحليل استجابة المقارنة: {str(e)}")
-        st.error(f"الاستجابة الخام: {response.text}")
-        return None
+        # Try to parse the JSON
+        try:
+            comparison = json.loads(response_text)
+            return comparison
+        except json.JSONDecodeError as e:
+            st.error(f"خطأ في تحليل استجابة المقارنة: {str(e)}")
+            st.error(f"الاستجابة الخام: {response.text}")
+            return None
+            
     except Exception as e:
         st.error(f"خطأ في مقارنة السيارات: {str(e)}")
         return None 
