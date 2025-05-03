@@ -3,11 +3,15 @@ from PIL import Image
 import io
 import cv2
 import numpy as np
-# import google.generativeai as genai
+import google.generativeai as genai
 
-# --- إعدادات أولية (يجب استبدالها) ---
-# قم بإعداد مفتاح API الخاص بك (يفضل استخدام st.secrets)
-# genai.configure(api_key="YOUR_GOOGLE_API_KEY")
+# --- إعدادات أولية ---
+# تكوين مفتاح API باستخدام Streamlit secrets
+if 'GOOGLE_API_KEY' in st.secrets:
+    genai.configure(api_key=st.secrets['GOOGLE_API_KEY'])
+else:
+    st.error("⚠️ لم يتم العثور على مفتاح API. يرجى إضافة مفتاح API في إعدادات Streamlit secrets.")
+    st.stop()
 
 # --- دوال مساعدة (تحتاج إلى تطبيق فعلي) ---
 
@@ -51,26 +55,26 @@ def call_gemini_vision(image_bytes, text_prompt):
     (Placeholder) تستدعي Gemini API لتحليل الصورة والنص.
     تحتاج إلى تطبيق فعلي لاستدعاء API.
     """
-    # model = genai.GenerativeModel('gemini-pro-vision') # أو النموذج الأحدث المناسب
-    # image_parts = [{"mime_type": "image/png", "data": image_bytes}]
-    # response = model.generate_content([text_prompt, image_parts])
-    # return response.text
+    model = genai.GenerativeModel('gemini-pro-vision') # أو النموذج الأحدث المناسب
+    image_parts = [{"mime_type": "image/png", "data": image_bytes}]
+    response = model.generate_content([text_prompt, image_parts])
+    return response.text
     # --- رد وهمي للتجربة ---
-    return f"""
-    **السيارة المحددة:** تويوتا كامري 2022 (تقديري)
-    **المواصفات:** محرك 4 سلندر 2.5 لتر، ناقل حركة أوتوماتيكي 8 سرعات، دفع أمامي.
-    **المميزات:** موثوقية عالية، استهلاك وقود جيد، مقصورة واسعة.
-    **العيوب الشائعة:** تصميم داخلي قديم بعض الشيء، تسارع متوسط.
-    """
+    # return f"""
+    # **السيارة المحددة:** تويوتا كامري 2022 (تقديري)
+    # **المواصفات:** محرك 4 سلندر 2.5 لتر، ناقل حركة أوتوماتيكي 8 سرعات، دفع أمامي.
+    # **المميزات:** موثوقية عالية، استهلاك وقود جيد، مقصورة واسعة.
+    # **العيوب الشائعة:** تصميم داخلي قديم بعض الشيء، تسارع متوسط.
+    # """
 
 def call_gemini_text(text_prompt):
     """
     (Placeholder) تستدعي Gemini API لمعالجة النصوص (للبحث عن الأسعار، الوقود، المقارنة).
     تحتاج إلى تطبيق فعلي لاستدعاء API.
     """
-    # model = genai.GenerativeModel('gemini-pro') # أو النموذج الأحدث
-    # response = model.generate_content(text_prompt)
-    # return response.text
+    model = genai.GenerativeModel('gemini-pro') # أو النموذج الأحدث
+    response = model.generate_content(text_prompt)
+    return response.text
     # --- ردود وهمية للتجربة ---
     if "سعر السوق" in text_prompt:
         return "متوسط سعر السوق المقدر في البلد المحدد: 25,000 - 28,000 دولار أمريكي (كمثال)."
