@@ -26,20 +26,18 @@ language = st.sidebar.selectbox(
 texts = {
     "English": {
         "title": "Car Interior Identifier",
-        "description": "Upload an image or use your camera to identify objects inside a car",
+        "description": "Upload an image to identify objects inside a car",
         "upload": "Upload an image",
-        "camera": "Use camera",
         "identify": "Tell me what this is",
-        "no_image": "Please upload an image or use your camera first",
+        "no_image": "Please upload an image first",
         "error": "Error processing image"
     },
     "Arabic": {
         "title": "معرف محتويات السيارة",
-        "description": "قم برفع صورة أو استخدم الكاميرا للتعرف على الأشياء داخل السيارة",
+        "description": "قم برفع صورة للتعرف على الأشياء داخل السيارة",
         "upload": "رفع صورة",
-        "camera": "استخدام الكاميرا",
         "identify": "اخبرني ما هذا",
-        "no_image": "الرجاء رفع صورة أو استخدام الكاميرا أولاً",
+        "no_image": "الرجاء رفع صورة أولاً",
         "error": "خطأ في معالجة الصورة"
     }
 }
@@ -48,24 +46,14 @@ texts = {
 st.title(texts[language]["title"])
 st.write(texts[language]["description"])
 
-# Create two columns for upload and camera options
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader(texts[language]["upload"])
-    uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png"])
-
-with col2:
-    st.subheader(texts[language]["camera"])
-    camera_image = st.camera_input("")
+# Upload image
+st.subheader(texts[language]["upload"])
+uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png"])
 
 # Process the image
-if uploaded_file or camera_image:
-    # Get the image from either source
-    if uploaded_file:
-        image = Image.open(uploaded_file)
-    else:
-        image = Image.open(camera_image)
+if uploaded_file:
+    # Get the image
+    image = Image.open(uploaded_file)
     
     # Display the image
     st.image(image, caption="Uploaded Image", use_container_width=True)
