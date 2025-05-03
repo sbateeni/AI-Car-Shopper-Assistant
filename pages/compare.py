@@ -2,93 +2,140 @@ import streamlit as st
 import google.generativeai as genai
 from dotenv import load_dotenv
 import os
-from src.car_comparison import compare_cars
+import json
 
 # Load environment variables
 load_dotenv()
 
 # Configure Gemini API
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    st.error("Please set your GEMINI_API_KEY in the .env file")
-    st.stop()
+genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 
-genai.configure(api_key=api_key)
+# Initialize model
 model = genai.GenerativeModel('models/gemini-2.0-flash-001')
 
-# Title and description
-st.title("🚗 Car Comparison Tool")
-st.write("Compare multiple cars based on their specifications")
+# Language selection
+language = st.sidebar.selectbox(
+    "Select Language / اختر اللغة",
+    ["English", "Arabic"]
+)
 
-# Get detected cars from session state
-detected_cars = st.session_state.get('detected_cars', [])
+# Get language-specific texts
+texts = {
+    "English": {
+        "title": "Car Comparison",
+        "description": "Compare two cars based on their specifications",
+        "car1": "First Car",
+        "car2": "Second Car",
+        "brand": "Brand",
+        "model": "Model",
+        "year": "Year",
+        "compare": "Compare Cars",
+        "overall": "Overall Comparison",
+        "performance": "Performance Comparison",
+        "technical": "Technical Specifications",
+        "pros_cons": "Pros and Cons",
+        "recommendation": "Recommendation"
+    },
+    "Arabic": {
+        "title": "مقارنة السيارات",
+        "description": "قارن بين سيارتين بناءً على مواصفاتهما",
+        "car1": "السيارة الأولى",
+        "car2": "السيارة الثانية",
+        "brand": "الماركة",
+        "model": "الموديل",
+        "year": "السنة",
+        "compare": "مقارنة السيارات",
+        "overall": "مقارنة عامة",
+        "performance": "مقارنة الأداء",
+        "technical": "المواصفات الفنية",
+        "pros_cons": "الإيجابيات والسلبيات",
+        "recommendation": "التوصية"
+    }
+}
 
-if not detected_cars:
-    st.warning("No cars detected. Please go back to the main page and detect some cars first.")
-    st.stop()
+# Main title and description
+st.title(texts[language]["title"])
+st.write(texts[language]["description"])
 
-# Display cars to compare
-st.subheader("Cars to Compare")
-for i, car in enumerate(detected_cars):
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        st.image(car['image'], width=200)
-    with col2:
-        st.write(f"**{car['brand']} {car['model']} ({car['year']})**")
-        st.write(f"Engine: {car['specs']['engine_size']}cc, {car['specs']['cylinders']} cylinders")
-        st.write(f"Horsepower: {car['specs']['horsepower']} HP")
-        st.write(f"Price Range: {car['specs']['price_range']}")
+# Create two columns for car inputs
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader(texts[language]["car1"])
+    car1_brand = st.text_input(f"{texts[language]['brand']} 1")
+    car1_model = st.text_input(f"{texts[language]['model']} 1")
+    car1_year = st.text_input(f"{texts[language]['year']} 1")
+
+with col2:
+    st.subheader(texts[language]["car2"])
+    car2_brand = st.text_input(f"{texts[language]['brand']} 2")
+    car2_model = st.text_input(f"{texts[language]['model']} 2")
+    car2_year = st.text_input(f"{texts[language]['year']} 2")
 
 # Compare button
-if st.button("Compare Cars"):
-    with st.spinner("Analyzing cars..."):
+if st.button(texts[language]["compare"]):
+    if car1_brand and car1_model and car1_year and car2_brand and car2_model and car2_year:
         try:
-            # Generate pairwise comparisons
-            comparisons = []
-            for i in range(len(detected_cars)):
-                for j in range(i + 1, len(detected_cars)):
-                    car1 = detected_cars[i]
-                    car2 = detected_cars[j]
-                    
-                    comparison = compare_cars(car1['specs'], car2['specs'], model)
-                    comparisons.append({
-                        'car1': car1,
-                        'car2': car2,
-                        'comparison': comparison
-                    })
+            # Get specifications for both cars
+            prompt = f"""Compare the following two cars and provide a detailed analysis:
             
-            # Display comparisons
-            st.success("Comparison complete!")
+            Car 1: {car1_year} {car1_brand} {car1_model}
+            Car 2: {car2_year} {car2_brand} {car2_model}
             
-            for comp in comparisons:
-                st.subheader(f"Comparison: {comp['car1']['brand']} {comp['car1']['model']} vs {comp['car2']['brand']} {comp['car2']['model']}")
+            Provide the comparison in the following format:
+            {{
+                "overall_comparison": "string",
+                "performance_comparison": "string",
+                "technical_comparison": "string",
+                "pros_and_cons": {{
+                    "car1_pros": ["string"],
+                    "car1_cons": ["string"],
+                    "car2_pros": ["string"],
+                    "car2_cons": ["string"]
+                }},
+                "recommendation": "string"
+            }}
+            
+            Only return the JSON object, nothing else. Do not include any text before or after the JSON."""
+            
+            response = model.generate_content(prompt)
+            comparison = json.loads(response.text.strip())
+            
+            # Display comparison results
+            st.subheader(texts[language]["overall"])
+            st.write(comparison["overall_comparison"])
+            
+            st.subheader(texts[language]["performance"])
+            st.write(comparison["performance_comparison"])
+            
+            st.subheader(texts[language]["technical"])
+            st.write(comparison["technical_comparison"])
+            
+            st.subheader(texts[language]["pros_cons"])
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write(f"**{car1_brand} {car1_model} Pros:**")
+                for pro in comparison["pros_and_cons"]["car1_pros"]:
+                    st.write(f"✅ {pro}")
                 
-                # Display specifications side by side
-                col1, col2 = st.columns(2)
+                st.write(f"**{car1_brand} {car1_model} Cons:**")
+                for con in comparison["pros_and_cons"]["car1_cons"]:
+                    st.write(f"❌ {con}")
+            
+            with col2:
+                st.write(f"**{car2_brand} {car2_model} Pros:**")
+                for pro in comparison["pros_and_cons"]["car2_pros"]:
+                    st.write(f"✅ {pro}")
                 
-                with col1:
-                    st.write(f"**{comp['car1']['brand']} {comp['car1']['model']} ({comp['car1']['year']})**")
-                    st.json(comp['car1']['specs'])
-                
-                with col2:
-                    st.write(f"**{comp['car2']['brand']} {comp['car2']['model']} ({comp['car2']['year']})**")
-                    st.json(comp['car2']['specs'])
-                
-                # Display detailed comparison
-                st.markdown(comp['comparison'])
-                st.markdown("---")
+                st.write(f"**{car2_brand} {car2_model} Cons:**")
+                for con in comparison["pros_and_cons"]["car2_cons"]:
+                    st.write(f"❌ {con}")
+            
+            st.subheader(texts[language]["recommendation"])
+            st.write(comparison["recommendation"])
+            
         except Exception as e:
-            st.error(f"Error: {str(e)}")
-
-# Add instructions
-st.markdown("""
-### Instructions:
-1. Review the cars to be compared
-2. Click 'Compare Cars' to see detailed comparisons between all cars
-3. Each comparison will show:
-   - Overall comparison
-   - Performance comparison
-   - Technical specifications
-   - Pros and cons
-   - Recommendations
-""") 
+            st.error(f"Error comparing cars: {str(e)}")
+    else:
+        st.error("Please fill in all fields for both cars") 

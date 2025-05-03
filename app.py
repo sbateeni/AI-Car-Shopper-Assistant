@@ -1,378 +1,230 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
-import os
 from dotenv import load_dotenv
-from src.car_detection import detect_car, extract_car_details
-from src.car_specs import get_vehicle_specs
+import os
+import json
+import re
 
 # Load environment variables
 load_dotenv()
 
 # Configure Gemini API
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    st.error("Please set your GEMINI_API_KEY in the .env file")
-    st.stop()
+genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 
-genai.configure(api_key=api_key)
+# Initialize models
 vision_model = genai.GenerativeModel('models/gemini-2.0-flash-001')
 text_model = genai.GenerativeModel('models/gemini-2.0-flash-001')
 
-# Set page configuration
-st.set_page_config(
-    page_title="Car Type Detector",
-    page_icon="🚗",
-    layout="centered"
-)
-
-# Language selection
+# Initialize session state for language
 if 'language' not in st.session_state:
     st.session_state.language = 'English'
 
-# Language texts
-texts = {
-    'English': {
-        'title': "🚗 Car Type Detector",
-        'description': "Upload images or use your camera to detect multiple cars and compare them",
-        'upload_header': "Upload Image",
-        'camera_header': "Use Camera",
-        'upload_prompt': "Choose an image...",
-        'detect_button': "Detect Car Type",
-        'analyzing': "Analyzing image...",
-        'detection_complete': "Car detection complete!",
-        'car_info': "Car Information",
-        'basic_info': "Basic Information",
-        'performance': "Performance",
-        'technical_details': "Technical Details",
-        'features': "Features",
-        'safety': "Safety Features",
-        'comfort': "Comfort Features",
-        'technology': "Technology Features",
-        'add_success': "Added {} to comparison list!",
-        'already_exists': "This car is already in the comparison list",
-        'add_more': "Would you like to add another car?",
-        'add_more_or_compare': "Would you like to add another car or proceed with comparison?",
-        'need_more': "You need at least 2 cars to compare. Would you like to add another car?",
-        'add_another': "Add Another Car",
-        'compare_now': "Compare Cars Now",
-        'detected_cars': "Detected Cars",
-        'remove': "Remove {}",
-        'compare_selected': "Compare Selected Cars",
-        'instructions': [
-            "Upload images or use your camera to take photos of multiple cars",
-            "Click 'Detect Car Type' for each car",
-            "After each detection, you can choose to:",
-            "- Add another car",
-            "- Compare the cars you have (if you have at least 2)",
-            "View the detected cars in the list below",
-            "Remove any unwanted cars using the Remove button",
-            "When ready, click 'Compare Selected Cars' to compare all cars"
-        ]
-    },
-    'Arabic': {
-        'title': "🚗 كاشف نوع المركبة",
-        'description': "قم برفع الصور أو استخدم الكاميرا للكشف عن عدة مركبات ومقارنتها",
-        'upload_header': "رفع صورة",
-        'camera_header': "استخدام الكاميرا",
-        'upload_prompt': "اختر صورة...",
-        'detect_button': "كشف نوع المركبة",
-        'analyzing': "جاري تحليل الصورة...",
-        'detection_complete': "اكتمل الكشف عن المركبة!",
-        'car_info': "معلومات المركبة",
-        'basic_info': "المعلومات الأساسية",
-        'performance': "الأداء",
-        'technical_details': "التفاصيل التقنية",
-        'features': "المميزات",
-        'safety': "مميزات الأمان",
-        'comfort': "مميزات الراحة",
-        'technology': "المميزات التقنية",
-        'add_success': "تمت إضافة {} إلى قائمة المقارنة!",
-        'already_exists': "هذه المركبة موجودة بالفعل في قائمة المقارنة",
-        'add_more': "هل تريد إضافة مركبة أخرى؟",
-        'add_more_or_compare': "هل تريد إضافة مركبة أخرى أو المتابعة للمقارنة؟",
-        'need_more': "تحتاج إلى مركبتين على الأقل للمقارنة. هل تريد إضافة مركبة أخرى؟",
-        'add_another': "إضافة مركبة أخرى",
-        'compare_now': "مقارنة المركبات الآن",
-        'detected_cars': "المركبات المكتشفة",
-        'remove': "إزالة {}",
-        'compare_selected': "مقارنة المركبات المختارة",
-        'instructions': [
-            "قم برفع الصور أو استخدم الكاميرا لالتقاط صور لعدة مركبات",
-            "انقر على 'كشف نوع المركبة' لكل صورة",
-            "بعد كل عملية كشف، يمكنك اختيار:",
-            "- إضافة مركبة أخرى",
-            "- مقارنة المركبات التي لديك (إذا كان لديك مركبتين على الأقل)",
-            "عرض المركبات المكتشفة في القائمة أدناه",
-            "إزالة أي مركبات غير مرغوب فيها باستخدام زر الإزالة",
-            "عندما تكون جاهزاً، انقر على 'مقارنة المركبات المختارة' لمقارنة جميع المركبات"
-        ]
-    }
-}
-
-# Language selection at the top
+# Language selection
 selected_language = st.selectbox(
     "Select Language / اختر اللغة",
-    options=list(texts.keys()),
-    index=list(texts.keys()).index(st.session_state.language)
+    options=['English', 'Arabic'],
+    index=0 if st.session_state.language == 'English' else 1
 )
 
 if selected_language != st.session_state.language:
     st.session_state.language = selected_language
     st.rerun()
 
-# Get current language texts
-lang = texts[st.session_state.language]
-
-# Initialize session state for storing cars
-if 'detected_cars' not in st.session_state:
-    st.session_state.detected_cars = []
-if 'continue_adding' not in st.session_state:
-    st.session_state.continue_adding = True
+# Get language-specific texts
+texts = {
+    "English": {
+        "title": "Car Type Detector",
+        "description": "Upload an image or use your camera to detect car type and get detailed specifications",
+        "upload": "Upload an image",
+        "camera": "Use camera",
+        "detect": "Detect Car Type",
+        "compare": "Compare with Another Car",
+        "specs": "Vehicle Specifications",
+        "basic_info": "Basic Information",
+        "performance": "Performance",
+        "technical": "Technical Specifications",
+        "features": "Features",
+        "price": "Price Range",
+        "safety": "Safety Features",
+        "comfort": "Comfort Features",
+        "tech": "Technology Features"
+    },
+    "Arabic": {
+        "title": "كاشف نوع السيارة",
+        "description": "قم برفع صورة أو استخدم الكاميرا للكشف عن نوع السيارة والحصول على مواصفات تفصيلية",
+        "upload": "رفع صورة",
+        "camera": "استخدام الكاميرا",
+        "detect": "كشف نوع السيارة",
+        "compare": "مقارنة مع سيارة أخرى",
+        "specs": "مواصفات المركبة",
+        "basic_info": "المعلومات الأساسية",
+        "performance": "الأداء",
+        "technical": "المواصفات الفنية",
+        "features": "المميزات",
+        "price": "نطاق السعر",
+        "safety": "مميزات الأمان",
+        "comfort": "مميزات الراحة",
+        "tech": "المميزات التكنولوجية"
+    }
+}
 
 # Title and description
-st.title(lang['title'])
-st.write(lang['description'])
+st.title(texts[st.session_state.language]["title"])
+st.write(texts[st.session_state.language]["description"])
 
-# Function to process a single car
-def process_car(image):
-    try:
-        # First, detect the car from the image
-        prompt = """
-        Analyze this car image and provide the following information in a structured format:
-        Make: [brand]
-        Model: [model]
-        Year: [year]
-        Type: [vehicle type]
+# Create two columns for upload and camera options
+col1, col2 = st.columns(2)
 
-        Be specific about the model and year if possible.
-        """
-        
-        if st.session_state.language == 'Arabic':
-            prompt = """
-            قم بتحليل صورة المركبة وقدم المعلومات التالية بتنسيق منظم:
-            الماركة: [brand]
-            الموديل: [model]
-            السنة: [year]
-            النوع: [vehicle type]
+with col1:
+    st.subheader(texts[st.session_state.language]["upload"])
+    uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png"])
 
-        كن محدداً بشأن الموديل والسنة إذا أمكن.
-        """
-        
-        car_info = detect_car(image, vision_model, prompt)
-        
-        if car_info:
-            st.success(lang['detection_complete'])
-            st.subheader(lang['car_info'])
-            st.write(car_info)
-            
-            # Extract car details
-            car_details = extract_car_details(car_info)
-            
-            if car_details['brand'] and car_details['model']:
-                # Get detailed specifications
-                with st.spinner(lang['analyzing']):
-                    prompt = f"""
-                    Please provide detailed specifications for a {car_details['year'] or 2023} {car_details['brand']} {car_details['model']}.
-                    Include:
-                    1. Brand
-                    2. Model
-                    3. Year
-                    4. Fuel consumption (liters/100km)
-                    5. Engine size (cc)
-                    6. Number of cylinders
-                    7. Transmission type
-                    8. Fuel type
-                    9. Horsepower
-                    10. Torque (Nm)
-                    11. Top speed (km/h)
-                    12. Acceleration 0-100 km/h (seconds)
-                    13. Price range (USD)
-                    14. Safety features
-                    15. Comfort features
-                    16. Technology features
-                    
-                    Format the response as a JSON object.
-                    """
-                    
-                    if st.session_state.language == 'Arabic':
-                        prompt = f"""
-                        يرجى تقديم مواصفات تفصيلية لمركبة {car_details['year'] or 2023} {car_details['brand']} {car_details['model']}.
-                        قم بتضمين:
-                        1. الماركة
-                        2. الموديل
-                        3. السنة
-                        4. استهلاك الوقود (لتر/100 كم)
-                        5. حجم المحرك (سي سي)
-                        6. عدد الأسطوانات
-                        7. نوع ناقل الحركة
-                        8. نوع الوقود
-                        9. القوة الحصانية
-                        10. عزم الدوران (نيوتن متر)
-                        11. السرعة القصوى (كم/ساعة)
-                        12. التسارع من 0-100 كم/ساعة (ثواني)
-                        13. نطاق السعر (دولار أمريكي)
-                        14. مميزات الأمان
-                        15. مميزات الراحة
-                        16. المميزات التقنية
-                        
-                        قم بتنسيق الرد ككائن JSON.
-                        """
-                    
-                    specs = get_vehicle_specs(
-                        car_details['brand'],
-                        car_details['model'],
-                        car_details['year'] or 2023,
-                        text_model,
-                        prompt
-                    )
-                    
-                    if specs:
-                        st.subheader(lang['technical_details'])
-                        
-                        # Create a more readable display of specifications
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.write(f"**{lang['basic_info']}**")
-                            st.write(f"Brand: {specs['brand']}")
-                            st.write(f"Model: {specs['model']}")
-                            st.write(f"Year: {specs['year']}")
-                            st.write(f"Type: {car_details['type'] or 'Unknown'}")
-                            
-                        with col2:
-                            st.write(f"**{lang['performance']}**")
-                            st.write(f"Engine: {specs['engine_size']}cc, {specs['cylinders']} cylinders")
-                            st.write(f"Horsepower: {specs['horsepower']} HP")
-                            st.write(f"Torque: {specs['torque']} Nm")
-                            st.write(f"Top Speed: {specs['top_speed']} km/h")
-                            st.write(f"0-100 km/h: {specs['acceleration']} seconds")
-                        
-                        st.write(f"**{lang['technical_details']}**")
-                        st.write(f"Transmission: {specs['transmission']}")
-                        st.write(f"Fuel Type: {specs['fuel_type']}")
-                        st.write(f"Fuel Consumption: {specs['fuel_consumption']} L/100km")
-                        
-                        st.write(f"**{lang['features']}**")
-                        st.write(f"{lang['safety']}:")
-                        for feature in specs['safety_features']:
-                            st.write(f"- {feature}")
-                        
-                        st.write(f"{lang['comfort']}:")
-                        for feature in specs['comfort_features']:
-                            st.write(f"- {feature}")
-                        
-                        st.write(f"{lang['technology']}:")
-                        for feature in specs['technology_features']:
-                            st.write(f"- {feature}")
-                        
-                        # Add car to detected cars list
-                        car_data = {
-                            'brand': specs['brand'],
-                            'model': specs['model'],
-                            'year': specs['year'],
-                            'specs': specs,
-                            'image': image
-                        }
-                        
-                        # Check if car is already in the list
-                        car_exists = False
-                        for car in st.session_state.detected_cars:
-                            if (car['brand'] == car_data['brand'] and 
-                                car['model'] == car_data['model'] and 
-                                car['year'] == car_data['year']):
-                                car_exists = True
-                                break
-                        
-                        if not car_exists:
-                            st.session_state.detected_cars.append(car_data)
-                            st.success(lang['add_success'].format(f"{car_data['brand']} {car_data['model']}"))
-                            
-                            # Ask if user wants to add more cars
-                            if len(st.session_state.detected_cars) < 2:
-                                st.info(lang['need_more'])
-                            else:
-                                st.info(lang['add_more_or_compare'])
-                            
-                            # Add buttons for next action
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                if st.button(lang['add_another']):
-                                    st.session_state.continue_adding = True
-                                    st.rerun()
-                            with col2:
-                                if len(st.session_state.detected_cars) >= 2:
-                                    if st.button(lang['compare_now']):
-                                        st.session_state.continue_adding = False
-                                        st.switch_page("pages/compare.py")
-                        else:
-                            st.warning(lang['already_exists'])
-                            st.info(lang['add_more'])
-                            if st.button(lang['add_another']):
-                                st.session_state.continue_adding = True
-                                st.rerun()
-                    else:
-                        st.warning("Could not extract enough information for detailed specifications")
-            else:
-                st.warning("Could not extract enough information for detailed specifications")
-        else:
-            st.error("Failed to process the image")
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
+with col2:
+    st.subheader(texts[st.session_state.language]["camera"])
+    camera_image = st.camera_input("")
 
-# Main interface
-if st.session_state.continue_adding:
-    # Create two columns for upload and camera options
-    col1, col2 = st.columns(2)
+# Process the image
+if uploaded_file or camera_image:
+    # Get the image from either source
+    if uploaded_file:
+        image = Image.open(uploaded_file)
+    else:
+        image = Image.open(camera_image)
     
-    with col1:
-        st.subheader(lang['upload_header'])
-        uploaded_file = st.file_uploader(lang['upload_prompt'], type=["jpg", "jpeg", "png"])
+    # Display the image
+    st.image(image, caption="Uploaded Image", use_container_width=True)
     
-    with col2:
-        st.subheader(lang['camera_header'])
-        camera_image = st.camera_input("Take a photo")
-    
-    # Process the image
-    if uploaded_file or camera_image:
-        # Get the image from either source
-        if uploaded_file:
-            image = Image.open(uploaded_file)
-        else:
-            image = Image.open(camera_image)
-        
-        # Display the image
-        st.image(image, caption="Uploaded Image", use_container_width=True)
-        
-        # Process button
-        if st.button(lang['detect_button']):
-            process_car(image)
-
-# Display detected cars
-if st.session_state.detected_cars:
-    st.subheader(lang['detected_cars'])
-    for i, car in enumerate(st.session_state.detected_cars):
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            st.image(car['image'], width=200)
-        with col2:
-            st.write(f"**{car['brand']} {car['model']} ({car['year']})**")
-            st.write(f"Engine: {car['specs']['engine_size']}cc, {car['specs']['cylinders']} cylinders")
-            st.write(f"Horsepower: {car['specs']['horsepower']} HP")
-            st.write(f"Price Range: {car['specs']['price_range']}")
+    # Process button
+    if st.button(texts[st.session_state.language]["detect"]):
+        try:
+            # Convert image to bytes
+            img_byte_arr = io.BytesIO()
+            if image.mode == 'RGBA':
+                image = image.convert('RGB')
+            image.save(img_byte_arr, format='JPEG')
+            img_byte_arr = img_byte_arr.getvalue()
             
-            # Add remove button
-            if st.button(lang['remove'].format(f"{car['brand']} {car['model']}"), key=f"remove_{i}"):
-                st.session_state.detected_cars.pop(i)
-                st.rerun()
-
-# Add comparison button if we have at least 2 cars
-if len(st.session_state.detected_cars) >= 2 and not st.session_state.continue_adding:
-    if st.button(lang['compare_selected']):
-        st.switch_page("pages/compare.py")
-
-# Add instructions
-st.markdown("""
-### Instructions:
-{}
-""".format("\n".join([f"{i+1}. {instruction}" for i, instruction in enumerate(lang['instructions'])]))) 
+            # Detect car details
+            response = vision_model.generate_content([
+                """Analyze this car image and provide the following information in JSON format:
+                {
+                    "brand": "car brand",
+                    "model": "car model",
+                    "year": "year of manufacture",
+                    "type": "car type (SUV, Sedan, etc.)"
+                }
+                Only return the JSON object, nothing else. Do not include any text before or after the JSON.""",
+                {"mime_type": "image/jpeg", "data": img_byte_arr}
+            ])
+            
+            # Extract car details from response
+            response_text = response.text.strip()
+            car_details = json.loads(response_text)
+            
+            # Get detailed specifications
+            specs_prompt = f"""Generate detailed specifications for a {car_details['year']} {car_details['brand']} {car_details['model']} in JSON format:
+            {{
+                "basic_info": {{
+                    "brand": "string",
+                    "model": "string",
+                    "year": "number",
+                    "type": "string"
+                }},
+                "performance": {{
+                    "fuel_consumption": "string",
+                    "engine_size": "string",
+                    "cylinders": "number",
+                    "transmission": "string",
+                    "fuel_type": "string",
+                    "horsepower": "number",
+                    "torque": "string",
+                    "top_speed": "string",
+                    "acceleration": "string"
+                }},
+                "technical_specs": {{
+                    "length": "string",
+                    "width": "string",
+                    "height": "string",
+                    "wheelbase": "string",
+                    "weight": "string",
+                    "seating_capacity": "number",
+                    "trunk_capacity": "string"
+                }},
+                "features": {{
+                    "price_range": "string",
+                    "safety_features": ["string"],
+                    "comfort_features": ["string"],
+                    "technology_features": ["string"]
+                }}
+            }}
+            Only return the JSON object, nothing else. Do not include any text before or after the JSON."""
+            
+            response = text_model.generate_content(specs_prompt)
+            specs = json.loads(response.text.strip())
+            
+            # Store car details in session state for comparison
+            st.session_state.current_car = {
+                'details': car_details,
+                'specs': specs,
+                'image': image
+            }
+            
+            # Display specifications
+            st.subheader(texts[st.session_state.language]["specs"])
+            
+            # Basic Information
+            st.subheader(texts[st.session_state.language]["basic_info"])
+            basic_info = specs["basic_info"]
+            st.write(f"**Brand:** {basic_info['brand']}")
+            st.write(f"**Model:** {basic_info['model']}")
+            st.write(f"**Year:** {basic_info['year']}")
+            st.write(f"**Type:** {basic_info['type']}")
+            
+            # Performance
+            st.subheader(texts[st.session_state.language]["performance"])
+            performance = specs["performance"]
+            st.write(f"**Fuel Consumption:** {performance['fuel_consumption']}")
+            st.write(f"**Engine Size:** {performance['engine_size']}")
+            st.write(f"**Cylinders:** {performance['cylinders']}")
+            st.write(f"**Transmission:** {performance['transmission']}")
+            st.write(f"**Fuel Type:** {performance['fuel_type']}")
+            st.write(f"**Horsepower:** {performance['horsepower']}")
+            st.write(f"**Torque:** {performance['torque']}")
+            st.write(f"**Top Speed:** {performance['top_speed']}")
+            st.write(f"**Acceleration:** {performance['acceleration']}")
+            
+            # Technical Specifications
+            st.subheader(texts[st.session_state.language]["technical"])
+            tech_specs = specs["technical_specs"]
+            st.write(f"**Length:** {tech_specs['length']}")
+            st.write(f"**Width:** {tech_specs['width']}")
+            st.write(f"**Height:** {tech_specs['height']}")
+            st.write(f"**Wheelbase:** {tech_specs['wheelbase']}")
+            st.write(f"**Weight:** {tech_specs['weight']}")
+            st.write(f"**Seating Capacity:** {tech_specs['seating_capacity']}")
+            st.write(f"**Trunk Capacity:** {tech_specs['trunk_capacity']}")
+            
+            # Features
+            st.subheader(texts[st.session_state.language]["features"])
+            features = specs["features"]
+            st.write(f"**{texts[st.session_state.language]['price']}:** {features['price_range']}")
+            
+            st.write(f"**{texts[st.session_state.language]['safety']}:**")
+            for feature in features["safety_features"]:
+                st.write(f"- {feature}")
+                
+            st.write(f"**{texts[st.session_state.language]['comfort']}:**")
+            for feature in features["comfort_features"]:
+                st.write(f"- {feature}")
+                
+            st.write(f"**{texts[st.session_state.language]['tech']}:**")
+            for feature in features["technology_features"]:
+                st.write(f"- {feature}")
+                
+            # Add comparison button
+            if st.button(texts[st.session_state.language]["compare"]):
+                st.switch_page("pages/compare.py")
+                
+        except Exception as e:
+            st.error(f"Error processing image: {str(e)}") 
