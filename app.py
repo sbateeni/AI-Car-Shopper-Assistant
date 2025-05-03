@@ -1,5 +1,5 @@
 import streamlit as st
-from utils import (
+from car_utils import (
     configure_api,
     image_to_base64,
     base64_to_image,
@@ -9,7 +9,7 @@ from utils import (
     COUNTRIES,
     UI_SETTINGS
 )
-from utils.car_detection import detect_car
+from car_utils.car_detection import detect_car
 from PIL import Image
 import io
 
