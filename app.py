@@ -115,6 +115,10 @@ def get_vehicle_specs(brand: str, model: str, year: int):
         10. Torque (Nm)
         11. Top speed (km/h)
         12. Acceleration 0-100 km/h (seconds)
+        13. Price range (USD)
+        14. Safety features
+        15. Comfort features
+        16. Technology features
         
         Format the response as a JSON object with this structure:
         {{
@@ -129,7 +133,11 @@ def get_vehicle_specs(brand: str, model: str, year: int):
             "horsepower": integer,
             "torque": integer,
             "top_speed": integer,
-            "acceleration": float
+            "acceleration": float,
+            "price_range": "string",
+            "safety_features": ["string"],
+            "comfort_features": ["string"],
+            "technology_features": ["string"]
         }}
         
         Important:
@@ -234,6 +242,23 @@ if uploaded_file or camera_image:
                             st.write(f"Transmission: {specs['transmission']}")
                             st.write(f"Fuel Type: {specs['fuel_type']}")
                             st.write(f"Fuel Consumption: {specs['fuel_consumption']} L/100km")
+                            
+                            st.write("**Features**")
+                            st.write("Safety Features:")
+                            for feature in specs['safety_features']:
+                                st.write(f"- {feature}")
+                            
+                            st.write("Comfort Features:")
+                            for feature in specs['comfort_features']:
+                                st.write(f"- {feature}")
+                            
+                            st.write("Technology Features:")
+                            for feature in specs['technology_features']:
+                                st.write(f"- {feature}")
+                            
+                            # Add comparison button
+                            if st.button("Compare with Another Car"):
+                                st.markdown("[Go to Comparison Tool](compare_cars.py)")
                 else:
                     st.warning("Could not extract enough information for detailed specifications")
             else:
@@ -247,4 +272,5 @@ st.markdown("""
 3. Wait for the AI to analyze the image and provide:
    - Basic car information (make, model, year, type)
    - Detailed specifications (performance, technical details)
+4. Click 'Compare with Another Car' to compare this car with another model
 """) 
