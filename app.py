@@ -9,7 +9,7 @@ from car_utils import (
     COUNTRIES,
     UI_SETTINGS
 )
-from car_utils.car_detection import detect_car
+from car_utils.car_detection import analyze_car
 from PIL import Image
 import io
 
@@ -186,7 +186,7 @@ elif app_mode == "✔️ تقييم سيارة واحدة":
             if st.button("🧐 قيّم هذه السيارة", key="evaluate_button"):
                 with st.spinner("⏳ جارٍ تحليل السيارة والبحث عن المعلومات..."):
                     # 1. الكشف عن السيارة
-                    detected_image, car_description = detect_car(img_bytes)
+                    detected_image, car_description = analyze_car(img_bytes)
                     if detected_image is None:
                         st.error(car_description)
                         st.stop()
