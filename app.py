@@ -70,6 +70,96 @@ texts = {
     }
 }
 
+def clean_json_string(json_str):
+    # Remove any text before or after the JSON object
+    json_match = re.search(r'\{.*\}', json_str, re.DOTALL)
+    if json_match:
+        json_str = json_match.group(0)
+    
+    # Remove any markdown formatting
+    json_str = json_str.replace('```json', '').replace('```', '')
+    
+    # Remove any whitespace at the beginning and end
+    json_str = json_str.strip()
+    
+    return json_str
+
+def process_car(image, language):
+    try:
+        # Convert image to bytes
+        img_byte_arr = io.BytesIO()
+        if image.mode == 'RGBA':
+            image = image.convert('RGB')
+        image.save(img_byte_arr, format='JPEG')
+        img_byte_arr = img_byte_arr.getvalue()
+        
+        # Detect car details
+        detection_prompt = """Analyze this car image and provide the following information in JSON format:
+        {
+            "brand": "car brand",
+            "model": "car model",
+            "year": "year of manufacture",
+            "type": "car type (SUV, Sedan, etc.)"
+        }
+        Only return the JSON object, nothing else. Do not include any text before or after the JSON."""
+        
+        response = vision_model.generate_content([
+            detection_prompt,
+            {"mime_type": "image/jpeg", "data": img_byte_arr}
+        ])
+        
+        # Clean and parse the response
+        response_text = clean_json_string(response.text)
+        car_details = json.loads(response_text)
+        
+        # Get detailed specifications
+        specs_prompt = f"""Generate detailed specifications for a {car_details['year']} {car_details['brand']} {car_details['model']} in JSON format:
+        {{
+            "basic_info": {{
+                "brand": "string",
+                "model": "string",
+                "year": "number",
+                "type": "string"
+            }},
+            "performance": {{
+                "fuel_consumption": "string",
+                "engine_size": "string",
+                "cylinders": "number",
+                "transmission": "string",
+                "fuel_type": "string",
+                "horsepower": "number",
+                "torque": "string",
+                "top_speed": "string",
+                "acceleration": "string"
+            }},
+            "technical_specs": {{
+                "length": "string",
+                "width": "string",
+                "height": "string",
+                "wheelbase": "string",
+                "weight": "string",
+                "seating_capacity": "number",
+                "trunk_capacity": "string"
+            }},
+            "features": {{
+                "price_range": "string",
+                "safety_features": ["string"],
+                "comfort_features": ["string"],
+                "technology_features": ["string"]
+            }}
+        }}
+        Only return the JSON object, nothing else. Do not include any text before or after the JSON."""
+        
+        response = text_model.generate_content(specs_prompt)
+        specs_text = clean_json_string(response.text)
+        specs = json.loads(specs_text)
+        
+        return car_details, specs
+        
+    except Exception as e:
+        st.error(f"Error processing image: {str(e)}")
+        return None, None
+
 # Title and description
 st.title(texts[st.session_state.language]["title"])
 st.write(texts[st.session_state.language]["description"])
@@ -98,134 +188,69 @@ if uploaded_file or camera_image:
     
     # Process button
     if st.button(texts[st.session_state.language]["detect"]):
-        try:
-            # Convert image to bytes
-            img_byte_arr = io.BytesIO()
-            if image.mode == 'RGBA':
-                image = image.convert('RGB')
-            image.save(img_byte_arr, format='JPEG')
-            img_byte_arr = img_byte_arr.getvalue()
+        with st.spinner("Processing image..."):
+            car_details, specs = process_car(image, st.session_state.language)
             
-            # Detect car details
-            response = vision_model.generate_content([
-                """Analyze this car image and provide the following information in JSON format:
-                {
-                    "brand": "car brand",
-                    "model": "car model",
-                    "year": "year of manufacture",
-                    "type": "car type (SUV, Sedan, etc.)"
+            if car_details and specs:
+                # Store car details in session state for comparison
+                st.session_state.current_car = {
+                    'details': car_details,
+                    'specs': specs,
+                    'image': image
                 }
-                Only return the JSON object, nothing else. Do not include any text before or after the JSON.""",
-                {"mime_type": "image/jpeg", "data": img_byte_arr}
-            ])
-            
-            # Extract car details from response
-            response_text = response.text.strip()
-            car_details = json.loads(response_text)
-            
-            # Get detailed specifications
-            specs_prompt = f"""Generate detailed specifications for a {car_details['year']} {car_details['brand']} {car_details['model']} in JSON format:
-            {{
-                "basic_info": {{
-                    "brand": "string",
-                    "model": "string",
-                    "year": "number",
-                    "type": "string"
-                }},
-                "performance": {{
-                    "fuel_consumption": "string",
-                    "engine_size": "string",
-                    "cylinders": "number",
-                    "transmission": "string",
-                    "fuel_type": "string",
-                    "horsepower": "number",
-                    "torque": "string",
-                    "top_speed": "string",
-                    "acceleration": "string"
-                }},
-                "technical_specs": {{
-                    "length": "string",
-                    "width": "string",
-                    "height": "string",
-                    "wheelbase": "string",
-                    "weight": "string",
-                    "seating_capacity": "number",
-                    "trunk_capacity": "string"
-                }},
-                "features": {{
-                    "price_range": "string",
-                    "safety_features": ["string"],
-                    "comfort_features": ["string"],
-                    "technology_features": ["string"]
-                }}
-            }}
-            Only return the JSON object, nothing else. Do not include any text before or after the JSON."""
-            
-            response = text_model.generate_content(specs_prompt)
-            specs = json.loads(response.text.strip())
-            
-            # Store car details in session state for comparison
-            st.session_state.current_car = {
-                'details': car_details,
-                'specs': specs,
-                'image': image
-            }
-            
-            # Display specifications
-            st.subheader(texts[st.session_state.language]["specs"])
-            
-            # Basic Information
-            st.subheader(texts[st.session_state.language]["basic_info"])
-            basic_info = specs["basic_info"]
-            st.write(f"**Brand:** {basic_info['brand']}")
-            st.write(f"**Model:** {basic_info['model']}")
-            st.write(f"**Year:** {basic_info['year']}")
-            st.write(f"**Type:** {basic_info['type']}")
-            
-            # Performance
-            st.subheader(texts[st.session_state.language]["performance"])
-            performance = specs["performance"]
-            st.write(f"**Fuel Consumption:** {performance['fuel_consumption']}")
-            st.write(f"**Engine Size:** {performance['engine_size']}")
-            st.write(f"**Cylinders:** {performance['cylinders']}")
-            st.write(f"**Transmission:** {performance['transmission']}")
-            st.write(f"**Fuel Type:** {performance['fuel_type']}")
-            st.write(f"**Horsepower:** {performance['horsepower']}")
-            st.write(f"**Torque:** {performance['torque']}")
-            st.write(f"**Top Speed:** {performance['top_speed']}")
-            st.write(f"**Acceleration:** {performance['acceleration']}")
-            
-            # Technical Specifications
-            st.subheader(texts[st.session_state.language]["technical"])
-            tech_specs = specs["technical_specs"]
-            st.write(f"**Length:** {tech_specs['length']}")
-            st.write(f"**Width:** {tech_specs['width']}")
-            st.write(f"**Height:** {tech_specs['height']}")
-            st.write(f"**Wheelbase:** {tech_specs['wheelbase']}")
-            st.write(f"**Weight:** {tech_specs['weight']}")
-            st.write(f"**Seating Capacity:** {tech_specs['seating_capacity']}")
-            st.write(f"**Trunk Capacity:** {tech_specs['trunk_capacity']}")
-            
-            # Features
-            st.subheader(texts[st.session_state.language]["features"])
-            features = specs["features"]
-            st.write(f"**{texts[st.session_state.language]['price']}:** {features['price_range']}")
-            
-            st.write(f"**{texts[st.session_state.language]['safety']}:**")
-            for feature in features["safety_features"]:
-                st.write(f"- {feature}")
                 
-            st.write(f"**{texts[st.session_state.language]['comfort']}:**")
-            for feature in features["comfort_features"]:
-                st.write(f"- {feature}")
+                # Display specifications
+                st.subheader(texts[st.session_state.language]["specs"])
                 
-            st.write(f"**{texts[st.session_state.language]['tech']}:**")
-            for feature in features["technology_features"]:
-                st.write(f"- {feature}")
+                # Basic Information
+                st.subheader(texts[st.session_state.language]["basic_info"])
+                basic_info = specs["basic_info"]
+                st.write(f"**Brand:** {basic_info['brand']}")
+                st.write(f"**Model:** {basic_info['model']}")
+                st.write(f"**Year:** {basic_info['year']}")
+                st.write(f"**Type:** {basic_info['type']}")
                 
-            # Add comparison button
-            if st.button(texts[st.session_state.language]["compare"]):
-                st.switch_page("pages/compare.py")
+                # Performance
+                st.subheader(texts[st.session_state.language]["performance"])
+                performance = specs["performance"]
+                st.write(f"**Fuel Consumption:** {performance['fuel_consumption']}")
+                st.write(f"**Engine Size:** {performance['engine_size']}")
+                st.write(f"**Cylinders:** {performance['cylinders']}")
+                st.write(f"**Transmission:** {performance['transmission']}")
+                st.write(f"**Fuel Type:** {performance['fuel_type']}")
+                st.write(f"**Horsepower:** {performance['horsepower']}")
+                st.write(f"**Torque:** {performance['torque']}")
+                st.write(f"**Top Speed:** {performance['top_speed']}")
+                st.write(f"**Acceleration:** {performance['acceleration']}")
                 
-        except Exception as e:
-            st.error(f"Error processing image: {str(e)}") 
+                # Technical Specifications
+                st.subheader(texts[st.session_state.language]["technical"])
+                tech_specs = specs["technical_specs"]
+                st.write(f"**Length:** {tech_specs['length']}")
+                st.write(f"**Width:** {tech_specs['width']}")
+                st.write(f"**Height:** {tech_specs['height']}")
+                st.write(f"**Wheelbase:** {tech_specs['wheelbase']}")
+                st.write(f"**Weight:** {tech_specs['weight']}")
+                st.write(f"**Seating Capacity:** {tech_specs['seating_capacity']}")
+                st.write(f"**Trunk Capacity:** {tech_specs['trunk_capacity']}")
+                
+                # Features
+                st.subheader(texts[st.session_state.language]["features"])
+                features = specs["features"]
+                st.write(f"**{texts[st.session_state.language]['price']}:** {features['price_range']}")
+                
+                st.write(f"**{texts[st.session_state.language]['safety']}:**")
+                for feature in features["safety_features"]:
+                    st.write(f"- {feature}")
+                    
+                st.write(f"**{texts[st.session_state.language]['comfort']}:**")
+                for feature in features["comfort_features"]:
+                    st.write(f"- {feature}")
+                    
+                st.write(f"**{texts[st.session_state.language]['tech']}:**")
+                for feature in features["technology_features"]:
+                    st.write(f"- {feature}")
+                    
+                # Add comparison button
+                if st.button(texts[st.session_state.language]["compare"]):
+                    st.switch_page("pages/compare.py") 
