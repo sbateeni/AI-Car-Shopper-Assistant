@@ -9,6 +9,7 @@ from utils import (
     COUNTRIES,
     UI_SETTINGS
 )
+from utils.car_detection import detect_car
 from PIL import Image
 import io
 
@@ -57,12 +58,21 @@ if app_mode == "📊 مقارنة عدة سيارات":
             st.image(img_bytes, caption="الصورة الأصلية", width=UI_SETTINGS["image_display"]["original_width"])
 
             with st.spinner("⏳ جارٍ معالجة الصورة وتحليل السيارة..."):
-                # 1. تمويه اللوحة
+                # 1. الكشف عن السيارة
+                detected_image, car_description = detect_car(img_bytes)
+                if detected_image is None:
+                    st.error(car_description)
+                    st.stop()
+                
+                st.image(detected_image, caption="تم الكشف عن السيارة", width=UI_SETTINGS["image_display"]["processed_width"])
+                st.info(car_description)
+
+                # 2. تمويه اللوحة
                 blurred_base64 = detect_and_blur_plate(img_bytes)
                 blurred_image = base64_to_image(blurred_base64)
                 st.image(blurred_image, caption="الصورة المعالجة (اللوحة مموهة)", width=UI_SETTINGS["image_display"]["processed_width"])
 
-                # 2. استدعاء Gemini Vision للتحليل
+                # 3. استدعاء Gemini للتحليل التفصيلي
                 vision_prompt = "حلل هذه الصورة لسيارة. حدد الماركة، الموديل، والسنة التقديرية. اذكر المواصفات الرئيسية والعيوب الشائعة المعروفة. تجاهل لوحة الترخيص."
                 car_info = call_gemini_vision(blurred_base64, vision_prompt)
 
@@ -168,26 +178,35 @@ elif app_mode == "✔️ تقييم سيارة واحدة":
 
             if st.button("🧐 قيّم هذه السيارة", key="evaluate_button"):
                 with st.spinner("⏳ جارٍ تحليل السيارة والبحث عن المعلومات..."):
-                    # 1. تمويه اللوحة
+                    # 1. الكشف عن السيارة
+                    detected_image, car_description = detect_car(img_bytes)
+                    if detected_image is None:
+                        st.error(car_description)
+                        st.stop()
+                    
+                    st.image(detected_image, caption="تم الكشف عن السيارة", width=UI_SETTINGS["image_display"]["single_car_width"])
+                    st.info(car_description)
+
+                    # 2. تمويه اللوحة
                     blurred_base64_single = detect_and_blur_plate(img_bytes)
                     blurred_image_single = base64_to_image(blurred_base64_single)
                     st.image(blurred_image_single, caption="الصورة المعالجة (اللوحة مموهة)", width=UI_SETTINGS["image_display"]["single_car_width"])
 
-                    # 2. استدعاء Gemini Vision للتحليل
+                    # 3. استدعاء Gemini للتحليل التفصيلي
                     vision_prompt_single = "حلل هذه الصورة لسيارة. حدد الماركة، الموديل، والسنة التقديرية. اذكر المواصفات الرئيسية والعيوب الشائعة المعروفة. تجاهل لوحة الترخيص."
                     car_info_single = call_gemini_vision(blurred_base64_single, vision_prompt_single)
 
                     car_name_year_single = "السيارة المفردة (المستخرجة من التحليل)"
 
-                    # 3. جلب سعر السوق
+                    # 4. جلب سعر السوق
                     price_prompt_single = f"ما هو متوسط سعر السوق لسيارة مثل '{car_name_year_single}' في {selected_country}؟"
                     market_price_single = call_gemini_text(price_prompt_single)
 
-                    # 4. جلب أسعار الوقود
+                    # 5. جلب أسعار الوقود
                     fuel_prompt_single = f"ما هي متوسط أسعار الوقود (بنزين وديزل) الحالية في {selected_country}؟"
                     fuel_prices_single = call_gemini_text(fuel_prompt_single)
 
-                    # 5. استدعاء Gemini لتقديم النصح والتقييم
+                    # 6. استدعاء Gemini لتقديم النصح والتقييم
                     advice_prompt = f"""
                     حلل السيارة التالية:
                     {car_info_single}
@@ -213,4 +232,4 @@ elif app_mode == "✔️ تقييم سيارة واحدة":
 
 # --- رسالة تذييل ---
 st.markdown("---")
-st.caption("تم التطوير باستخدام Streamlit و Python. يعتمد التحليل على Google Gemini API.") 
+st.caption("تم التطوير باستخدام Streamlit و Python. يعتمد التحليل على YOLOv8 و Google Gemini API.") 
