@@ -9,6 +9,8 @@ from utils import (
     COUNTRIES,
     UI_SETTINGS
 )
+from PIL import Image
+import io
 
 # --- إعدادات أولية ---
 if not configure_api():
@@ -23,7 +25,7 @@ with st.sidebar:
     selected_country = st.selectbox("اختر دولتك:", COUNTRIES)
 
     st.header("🚦 وضع التشغيل")
-    app_mode = st.radio("", ["📊 مقارنة عدة سيارات", "✔️ تقييم سيارة واحدة"])
+    app_mode = st.radio("اختر وضع التشغيل:", ["📊 مقارنة عدة سيارات", "✔️ تقييم سيارة واحدة"])
 
     st.info("🔒 سيتم تمويه لوحات الترخيص تلقائيًا لحماية الخصوصية.")
 
@@ -36,7 +38,7 @@ if app_mode == "📊 مقارنة عدة سيارات":
     st.header("📊 مقارنة عدة سيارات")
     st.write("أضف صور السيارات التي تريد مقارنتها:")
 
-    input_method = st.radio("اختر طريقة إدخال الصورة:", ["📸 التقاط صورة", "📁 رفع صورة"])
+    input_method = st.radio("اختر طريقة إدخال الصورة:", ["📸 التقاط صورة", "📁 رفع صورة"], label_visibility="visible")
     
     if input_method == "📸 التقاط صورة":
         uploaded_file = st.camera_input("📸 التقط صورة لسيارة جديدة للمقارنة", key=f"compare_cam_{len(st.session_state.cars_to_compare)}")
@@ -45,7 +47,13 @@ if app_mode == "📊 مقارنة عدة سيارات":
 
     if uploaded_file is not None:
         try:
-            img_bytes = uploaded_file.getvalue()
+            # قراءة الصورة مباشرة من الملف
+            image = Image.open(uploaded_file)
+            # تحويل الصورة إلى تنسيق PNG
+            img_bytes = io.BytesIO()
+            image.save(img_bytes, format='PNG')
+            img_bytes = img_bytes.getvalue()
+            
             st.image(img_bytes, caption="الصورة الأصلية", width=UI_SETTINGS["image_display"]["original_width"])
 
             with st.spinner("⏳ جارٍ معالجة الصورة وتحليل السيارة..."):
@@ -140,7 +148,7 @@ elif app_mode == "✔️ تقييم سيارة واحدة":
     st.header("✔️ تقييم سيارة واحدة")
     st.write("أضف صورة السيارة التي تريد تقييمها:")
 
-    input_method_single = st.radio("اختر طريقة إدخال الصورة:", ["📸 التقاط صورة", "📁 رفع صورة"], key="single_input_method")
+    input_method_single = st.radio("اختر طريقة إدخال الصورة:", ["📸 التقاط صورة", "📁 رفع صورة"], key="single_input_method", label_visibility="visible")
     
     if input_method_single == "📸 التقاط صورة":
         uploaded_file_single = st.camera_input("📸 التقط صورة السيارة", key="single_cam")
@@ -149,13 +157,19 @@ elif app_mode == "✔️ تقييم سيارة واحدة":
 
     if uploaded_file_single is not None:
         try:
-            img_bytes_single = uploaded_file_single.getvalue()
-            st.image(img_bytes_single, caption="الصورة الأصلية", width=UI_SETTINGS["image_display"]["single_car_width"])
+            # قراءة الصورة مباشرة من الملف
+            image = Image.open(uploaded_file_single)
+            # تحويل الصورة إلى تنسيق PNG
+            img_bytes = io.BytesIO()
+            image.save(img_bytes, format='PNG')
+            img_bytes = img_bytes.getvalue()
+            
+            st.image(img_bytes, caption="الصورة الأصلية", width=UI_SETTINGS["image_display"]["single_car_width"])
 
             if st.button("🧐 قيّم هذه السيارة", key="evaluate_button"):
                 with st.spinner("⏳ جارٍ تحليل السيارة والبحث عن المعلومات..."):
                     # 1. تمويه اللوحة
-                    blurred_base64_single = detect_and_blur_plate(img_bytes_single)
+                    blurred_base64_single = detect_and_blur_plate(img_bytes)
                     blurred_image_single = base64_to_image(blurred_base64_single)
                     st.image(blurred_image_single, caption="الصورة المعالجة (اللوحة مموهة)", width=UI_SETTINGS["image_display"]["single_car_width"])
 
