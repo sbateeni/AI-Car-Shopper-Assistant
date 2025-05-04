@@ -6,11 +6,30 @@ import json
 import re
 from src.database import get_all_cars, delete_car
 
+def clean_json_string(json_str):
+    # Remove any text before or after the JSON object
+    json_match = re.search(r'\{.*\}', json_str, re.DOTALL)
+    if json_match:
+        json_str = json_match.group(0)
+    
+    # Remove any markdown formatting
+    json_str = json_str.replace('```json', '').replace('```', '')
+    
+    # Remove any whitespace at the beginning and end
+    json_str = json_str.strip()
+    
+    return json_str
+
 # Load environment variables
 load_dotenv()
 
 # Configure Gemini API
-genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+api_key = st.session_state.get('api_key', os.getenv('GEMINI_API_KEY', ''))
+if api_key:
+    genai.configure(api_key=api_key)
+else:
+    st.warning("يرجى إدخال مفتاح Gemini API في الصفحة الرئيسية أولاً.")
+    st.stop()
 
 # Initialize model
 model = genai.GenerativeModel('models/gemini-2.0-flash-001')
@@ -87,6 +106,10 @@ if not detected_cars:
     st.warning(texts[language]["no_cars"])
     st.stop()
 
+# Initialize selected cars in session state if not exists
+if 'selected_cars' not in st.session_state:
+    st.session_state.selected_cars = []
+
 # Display cars in a grid
 cols = st.columns(3)
 for i, car in enumerate(detected_cars):
@@ -105,11 +128,13 @@ for i, car in enumerate(detected_cars):
                 st.rerun()
         
         with col2:
-            # Delete button
-            if st.button(f"{texts[language]['delete']} {i+1}", key=f"delete_{i}"):
-                if st.checkbox(texts[language]["delete_confirm"], key=f"confirm_{i}"):
-                    delete_car(car['id'])
-                    st.rerun()
+            # Compare checkbox
+            if st.checkbox(f"{texts[language]['compare']} {i+1}", key=f"compare_{i}"):
+                if car not in st.session_state.selected_cars:
+                    st.session_state.selected_cars.append(car)
+            else:
+                if car in st.session_state.selected_cars:
+                    st.session_state.selected_cars.remove(car)
 
 # Check if we're viewing a car's details
 if 'viewing_car' in st.session_state:
@@ -173,91 +198,191 @@ if 'viewing_car' in st.session_state:
     
     st.stop()
 
-# Compare button
-if len(detected_cars) >= 2:
+# Compare selected cars
+if len(st.session_state.selected_cars) >= 2:
     if st.button(texts[language]["compare"]):
         try:
-            car1 = detected_cars[0]
-            car2 = detected_cars[1]
+            car1 = st.session_state.selected_cars[0]
+            car2 = st.session_state.selected_cars[1]
             
             # Get specifications for both cars
-            prompt = f"""قارن بين السيارتين التاليتين وقدم تحليلاً مفصلاً:
+            prompt = f"""قم بمقارنة السيارتين التاليتين مع التركيز على المخرجات والمواصفات الفنية المهمة للمشتري:
             
             السيارة الأولى: {car1['details']['year']} {car1['details']['brand']} {car1['details']['model']}
             السيارة الثانية: {car2['details']['year']} {car2['details']['brand']} {car2['details']['model']}
             
             قدم المقارنة بالتنسيق التالي:
             {{
-                "overall_comparison": "مقارنة عامة بين السيارتين",
-                "performance_comparison": "مقارنة الأداء",
-                "technical_comparison": "مقارنة المواصفات الفنية",
-                "pros_and_cons": {{
-                    "car1_pros": ["مميزات السيارة الأولى"],
-                    "car1_cons": ["عيوب السيارة الأولى"],
-                    "car2_pros": ["مميزات السيارة الثانية"],
-                    "car2_cons": ["عيوب السيارة الثانية"]
+                "engine_comparison": {{
+                    "car1": {{
+                        "power": "قوة المحرك بالحصان",
+                        "torque": "عزم الدوران",
+                        "acceleration": "التسارع من 0-100 كم/س",
+                        "top_speed": "السرعة القصوى"
+                    }},
+                    "car2": {{
+                        "power": "قوة المحرك بالحصان",
+                        "torque": "عزم الدوران",
+                        "acceleration": "التسارع من 0-100 كم/س",
+                        "top_speed": "السرعة القصوى"
+                    }},
+                    "winner": "السيارة الأفضل من حيث الأداء",
+                    "reason": "سبب التفوق في الأداء"
                 }},
-                "recommendation": "توصية عامة"
+                "fuel_efficiency": {{
+                    "car1": {{
+                        "city": "استهلاك الوقود في المدينة",
+                        "highway": "استهلاك الوقود على الطرق السريعة",
+                        "combined": "متوسط استهلاك الوقود"
+                    }},
+                    "car2": {{
+                        "city": "استهلاك الوقود في المدينة",
+                        "highway": "استهلاك الوقود على الطرق السريعة",
+                        "combined": "متوسط استهلاك الوقود"
+                    }},
+                    "winner": "السيارة الأكثر كفاءة في استهلاك الوقود",
+                    "reason": "سبب التفوق في كفاءة استهلاك الوقود"
+                }},
+                "maintenance": {{
+                    "car1": {{
+                        "service_interval": "فترة الصيانة",
+                        "maintenance_cost": "تكلفة الصيانة",
+                        "reliability": "الموثوقية"
+                    }},
+                    "car2": {{
+                        "service_interval": "فترة الصيانة",
+                        "maintenance_cost": "تكلفة الصيانة",
+                        "reliability": "الموثوقية"
+                    }},
+                    "winner": "السيارة الأقل تكلفة في الصيانة",
+                    "reason": "سبب التفوق في الصيانة"
+                }},
+                "value_for_money": {{
+                    "car1": {{
+                        "price": "السعر",
+                        "resale_value": "قيمة إعادة البيع",
+                        "features": "المميزات مقابل السعر"
+                    }},
+                    "car2": {{
+                        "price": "السعر",
+                        "resale_value": "قيمة إعادة البيع",
+                        "features": "المميزات مقابل السعر"
+                    }},
+                    "winner": "السيارة الأفضل من حيث القيمة مقابل السعر",
+                    "reason": "سبب التفوق في القيمة مقابل السعر"
+                }},
+                "final_recommendation": {{
+                    "best_choice": "السيارة الموصى بها للشراء",
+                    "reason": "سبب التوصية",
+                    "suitable_for": "مناسبة لمن؟",
+                    "considerations": "نقاط يجب مراعاتها قبل الشراء"
+                }}
             }}
             
             يجب أن تكون جميع الإجابات باللغة العربية.
             قم بإرجاع كائن JSON فقط، بدون أي نص إضافي قبل أو بعد الكائن."""
             
             response = model.generate_content(prompt)
-            comparison = json.loads(response.text.strip())
             
-            # Display comparison results
-            st.subheader(texts[language]["overall"])
-            st.write(comparison["overall_comparison"])
+            # Clean and parse the response
+            response_text = clean_json_string(response.text)
             
-            st.subheader(texts[language]["performance"])
-            st.write(comparison["performance_comparison"])
+            # Debug: Print the cleaned response
+            st.write("الاستجابة بعد التنظيف:", response_text)
             
-            st.subheader(texts[language]["technical"])
-            st.write(comparison["technical_comparison"])
-            
-            st.subheader(texts[language]["pros_cons"])
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write(f"**مميزات {car1['details']['brand']} {car1['details']['model']}:**")
-                for pro in comparison["pros_and_cons"]["car1_pros"]:
-                    st.write(f"✅ {pro}")
+            # Try to parse the JSON
+            try:
+                comparison = json.loads(response_text)
                 
-                st.write(f"**عيوب {car1['details']['brand']} {car1['details']['model']}:**")
-                for con in comparison["pros_and_cons"]["car1_cons"]:
-                    st.write(f"❌ {con}")
-            
-            with col2:
-                st.write(f"**مميزات {car2['details']['brand']} {car2['details']['model']}:**")
-                for pro in comparison["pros_and_cons"]["car2_pros"]:
-                    st.write(f"✅ {pro}")
+                # Display comparison results
+                st.subheader("مقارنة المحرك والأداء")
+                col1, col2 = st.columns(2)
                 
-                st.write(f"**عيوب {car2['details']['brand']} {car2['details']['model']}:**")
-                for con in comparison["pros_and_cons"]["car2_cons"]:
-                    st.write(f"❌ {con}")
-            
-            st.subheader(texts[language]["recommendation"])
-            st.write(comparison["recommendation"])
+                with col1:
+                    st.write(f"**{car1['details']['brand']} {car1['details']['model']}:**")
+                    st.write(f"قوة المحرك: {comparison['engine_comparison']['car1']['power']}")
+                    st.write(f"عزم الدوران: {comparison['engine_comparison']['car1']['torque']}")
+                    st.write(f"التسارع: {comparison['engine_comparison']['car1']['acceleration']}")
+                    st.write(f"السرعة القصوى: {comparison['engine_comparison']['car1']['top_speed']}")
+                
+                with col2:
+                    st.write(f"**{car2['details']['brand']} {car2['details']['model']}:**")
+                    st.write(f"قوة المحرك: {comparison['engine_comparison']['car2']['power']}")
+                    st.write(f"عزم الدوران: {comparison['engine_comparison']['car2']['torque']}")
+                    st.write(f"التسارع: {comparison['engine_comparison']['car2']['acceleration']}")
+                    st.write(f"السرعة القصوى: {comparison['engine_comparison']['car2']['top_speed']}")
+                
+                st.write(f"**النتيجة:** {comparison['engine_comparison']['winner']}")
+                st.write(f"**السبب:** {comparison['engine_comparison']['reason']}")
+                
+                st.subheader("كفاءة استهلاك الوقود")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write(f"**{car1['details']['brand']} {car1['details']['model']}:**")
+                    st.write(f"في المدينة: {comparison['fuel_efficiency']['car1']['city']}")
+                    st.write(f"على الطرق السريعة: {comparison['fuel_efficiency']['car1']['highway']}")
+                    st.write(f"المتوسط: {comparison['fuel_efficiency']['car1']['combined']}")
+                
+                with col2:
+                    st.write(f"**{car2['details']['brand']} {car2['details']['model']}:**")
+                    st.write(f"في المدينة: {comparison['fuel_efficiency']['car2']['city']}")
+                    st.write(f"على الطرق السريعة: {comparison['fuel_efficiency']['car2']['highway']}")
+                    st.write(f"المتوسط: {comparison['fuel_efficiency']['car2']['combined']}")
+                
+                st.write(f"**النتيجة:** {comparison['fuel_efficiency']['winner']}")
+                st.write(f"**السبب:** {comparison['fuel_efficiency']['reason']}")
+                
+                st.subheader("تكاليف الصيانة")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write(f"**{car1['details']['brand']} {car1['details']['model']}:**")
+                    st.write(f"فترة الصيانة: {comparison['maintenance']['car1']['service_interval']}")
+                    st.write(f"تكلفة الصيانة: {comparison['maintenance']['car1']['maintenance_cost']}")
+                    st.write(f"الموثوقية: {comparison['maintenance']['car1']['reliability']}")
+                
+                with col2:
+                    st.write(f"**{car2['details']['brand']} {car2['details']['model']}:**")
+                    st.write(f"فترة الصيانة: {comparison['maintenance']['car2']['service_interval']}")
+                    st.write(f"تكلفة الصيانة: {comparison['maintenance']['car2']['maintenance_cost']}")
+                    st.write(f"الموثوقية: {comparison['maintenance']['car2']['reliability']}")
+                
+                st.write(f"**النتيجة:** {comparison['maintenance']['winner']}")
+                st.write(f"**السبب:** {comparison['maintenance']['reason']}")
+                
+                st.subheader("القيمة مقابل السعر")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write(f"**{car1['details']['brand']} {car1['details']['model']}:**")
+                    st.write(f"السعر: {comparison['value_for_money']['car1']['price']}")
+                    st.write(f"قيمة إعادة البيع: {comparison['value_for_money']['car1']['resale_value']}")
+                    st.write(f"المميزات مقابل السعر: {comparison['value_for_money']['car1']['features']}")
+                
+                with col2:
+                    st.write(f"**{car2['details']['brand']} {car2['details']['model']}:**")
+                    st.write(f"السعر: {comparison['value_for_money']['car2']['price']}")
+                    st.write(f"قيمة إعادة البيع: {comparison['value_for_money']['car2']['resale_value']}")
+                    st.write(f"المميزات مقابل السعر: {comparison['value_for_money']['car2']['features']}")
+                
+                st.write(f"**النتيجة:** {comparison['value_for_money']['winner']}")
+                st.write(f"**السبب:** {comparison['value_for_money']['reason']}")
+                
+                st.subheader("التوصية النهائية")
+                st.write(f"**السيارة الموصى بها:** {comparison['final_recommendation']['best_choice']}")
+                st.write(f"**سبب التوصية:** {comparison['final_recommendation']['reason']}")
+                st.write(f"**مناسبة لمن؟** {comparison['final_recommendation']['suitable_for']}")
+                st.write(f"**نقاط يجب مراعاتها قبل الشراء:** {comparison['final_recommendation']['considerations']}")
+                
+            except json.JSONDecodeError as e:
+                st.error(f"خطأ في تحليل استجابة المقارنة: {str(e)}")
+                st.error(f"الاستجابة الخام: {response.text}")
             
         except Exception as e:
             st.error(f"خطأ في مقارنة السيارات: {str(e)}")
 else:
-    st.warning("يجب أن يكون هناك سيارة على الأقل للمقارنة")
-
-def clean_json_string(json_str):
-    # Remove any text before or after the JSON object
-    json_match = re.search(r'\{.*\}', json_str, re.DOTALL)
-    if json_match:
-        json_str = json_match.group(0)
-    
-    # Remove any markdown formatting
-    json_str = json_str.replace('```json', '').replace('```', '')
-    
-    # Remove any whitespace at the beginning and end
-    json_str = json_str.strip()
-    
-    return json_str
+    st.warning("يجب اختيار سيارتين على الأقل للمقارنة")
 
 def compare_cars(car1, car2, language):
     try:
