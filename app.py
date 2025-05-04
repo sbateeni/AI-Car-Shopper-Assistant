@@ -228,6 +228,72 @@ def process_car(image, language):
 st.title(texts[st.session_state.language]["title"])
 st.write(texts[st.session_state.language]["description"])
 
+# Add manual car input section
+st.subheader("إضافة سيارة يدوياً / Add Car Manually")
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    manual_brand = st.text_input("الشركة المصنعة / Brand")
+with col2:
+    manual_model = st.text_input("الموديل / Model")
+with col3:
+    manual_year = st.text_input("السنة / Year")
+
+manual_type = st.selectbox(
+    "الفئة / Type",
+    ["SUV", "Sedan", "Hatchback", "Coupe", "Sports Car", "Pickup", "Van", "Other"]
+)
+
+if st.button("إضافة السيارة / Add Car"):
+    if manual_brand and manual_model and manual_year:
+        # Create a new car entry
+        new_car = {
+            'details': {
+                'brand': manual_brand,
+                'model': manual_model,
+                'year': manual_year,
+                'type': manual_type
+            },
+            'specs': {
+                'performance': {
+                    'fuel_consumption': "سيتم تحديثه",
+                    'engine_size': "سيتم تحديثه",
+                    'cylinders': "سيتم تحديثه",
+                    'transmission': "سيتم تحديثه",
+                    'fuel_type': "سيتم تحديثه",
+                    'horsepower': "سيتم تحديثه",
+                    'torque': "سيتم تحديثه",
+                    'top_speed': "سيتم تحديثه",
+                    'acceleration': "سيتم تحديثه"
+                },
+                'technical_specs': {
+                    'length': "سيتم تحديثه",
+                    'width': "سيتم تحديثه",
+                    'height': "سيتم تحديثه",
+                    'wheelbase': "سيتم تحديثه",
+                    'weight': "سيتم تحديثه",
+                    'seating_capacity': "سيتم تحديثه",
+                    'trunk_capacity': "سيتم تحديثه"
+                },
+                'features': {
+                    'price_range': "سيتم تحديثه",
+                    'safety_features': ["سيتم تحديثه"],
+                    'comfort_features': ["سيتم تحديثه"],
+                    'technology_features': ["سيتم تحديثه"]
+                }
+            },
+            'image': None  # No image for manually added cars
+        }
+        
+        # Save to database
+        save_car(new_car)
+        st.success("تمت إضافة السيارة بنجاح / Car added successfully")
+        st.rerun()
+    else:
+        st.warning("يرجى ملء جميع الحقول المطلوبة / Please fill all required fields")
+
+st.markdown("---")  # Add a separator
+
 # Create two columns for upload and camera options
 col1, col2 = st.columns(2)
 
