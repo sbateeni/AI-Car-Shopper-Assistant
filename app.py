@@ -7,6 +7,7 @@ import os
 import json
 import re
 from src.database import save_car, get_all_cars
+from src.car_data import get_car_brands, get_car_models, get_car_types, get_car_data_from_brand
 
 # Load environment variables
 load_dotenv()
@@ -233,64 +234,16 @@ st.subheader("إضافة سيارة يدوياً / Add Car Manually")
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    manual_brand = st.text_input("الشركة المصنعة / Brand")
+    brand = st.text_input("الشركة المصنعة / Brand")
 with col2:
-    manual_model = st.text_input("الموديل / Model")
+    model = st.text_input("الموديل / Model")
 with col3:
-    manual_year = st.text_input("السنة / Year")
+    year = st.text_input("السنة / Year")
 
-manual_type = st.selectbox(
+car_type = st.selectbox(
     "الفئة / Type",
-    ["SUV", "Sedan", "Hatchback", "Coupe", "Sports Car", "Pickup", "Van", "Other"]
+    ["SUV", "Sedan", "Hatchback", "Coupe", "Sports Car", "Pickup", "Van", "Wagon", "Convertible", "Crossover", "Luxury", "Electric", "Hybrid", "Other"]
 )
-
-if st.button("إضافة السيارة / Add Car"):
-    if manual_brand and manual_model and manual_year:
-        # Create a new car entry
-        new_car = {
-            'details': {
-                'brand': manual_brand,
-                'model': manual_model,
-                'year': manual_year,
-                'type': manual_type
-            },
-            'specs': {
-                'performance': {
-                    'fuel_consumption': "سيتم تحديثه",
-                    'engine_size': "سيتم تحديثه",
-                    'cylinders': "سيتم تحديثه",
-                    'transmission': "سيتم تحديثه",
-                    'fuel_type': "سيتم تحديثه",
-                    'horsepower': "سيتم تحديثه",
-                    'torque': "سيتم تحديثه",
-                    'top_speed': "سيتم تحديثه",
-                    'acceleration': "سيتم تحديثه"
-                },
-                'technical_specs': {
-                    'length': "سيتم تحديثه",
-                    'width': "سيتم تحديثه",
-                    'height': "سيتم تحديثه",
-                    'wheelbase': "سيتم تحديثه",
-                    'weight': "سيتم تحديثه",
-                    'seating_capacity': "سيتم تحديثه",
-                    'trunk_capacity': "سيتم تحديثه"
-                },
-                'features': {
-                    'price_range': "سيتم تحديثه",
-                    'safety_features': ["سيتم تحديثه"],
-                    'comfort_features': ["سيتم تحديثه"],
-                    'technology_features': ["سيتم تحديثه"]
-                }
-            },
-            'image': None  # No image for manually added cars
-        }
-        
-        # Save to database
-        save_car(new_car)
-        st.success("تمت إضافة السيارة بنجاح / Car added successfully")
-        st.rerun()
-    else:
-        st.warning("يرجى ملء جميع الحقول المطلوبة / Please fill all required fields")
 
 st.markdown("---")  # Add a separator
 
@@ -299,90 +252,145 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader(texts[st.session_state.language]["upload"])
-    uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png"])
+    uploaded_file = st.file_uploader(
+        label="اختر صورة سيارة / Choose a car image",
+        type=["jpg", "jpeg", "png"],
+        label_visibility="visible"
+    )
 
-# Process the image
-if uploaded_file:
-    # Get the image
-    image = Image.open(uploaded_file)
-    
-    # Display the image
-    st.image(image, caption="Uploaded Image", use_container_width=True)
-    
-    # Process button
-    if st.button(texts[st.session_state.language]["detect"]):
+# Process button - always visible
+if st.button(texts[st.session_state.language]["detect"], label_visibility="visible"):
+    if uploaded_file:
+        # Process image
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Uploaded Image", use_container_width=True)
+        
         with st.spinner("Processing image..."):
             car_details, specs = process_car(image, st.session_state.language)
+    elif brand and model and year:
+        # Process manual input
+        with st.spinner("Processing car details..."):
+            # Create car details from manual input
+            car_details = {
+                'brand': brand,
+                'model': model,
+                'year': year,
+                'type': car_type
+            }
             
-            if car_details and specs:
-                # Store car details
-                car_data = {
-                    'details': car_details,
-                    'specs': specs,
-                    'image': image
-                }
-                
-                # Save to database
-                save_car(car_data)
-                
-                # Display specifications
-                st.subheader(texts[st.session_state.language]["specs"])
-                
-                # Basic Information
-                st.subheader(texts[st.session_state.language]["basic_info"])
-                basic_info = specs["basic_info"]
-                st.write(f"**Brand:** {basic_info['brand']}")
-                st.write(f"**Model:** {basic_info['model']}")
-                st.write(f"**Year:** {basic_info['year']}")
-                st.write(f"**Type:** {basic_info['type']}")
-                
-                # Performance
-                st.subheader(texts[st.session_state.language]["performance"])
-                performance = specs["performance"]
-                st.write(f"**Fuel Consumption:** {performance['fuel_consumption']}")
-                st.write(f"**Engine Size:** {performance['engine_size']}")
-                st.write(f"**Cylinders:** {performance['cylinders']}")
-                st.write(f"**Transmission:** {performance['transmission']}")
-                st.write(f"**Fuel Type:** {performance['fuel_type']}")
-                st.write(f"**Horsepower:** {performance['horsepower']}")
-                st.write(f"**Torque:** {performance['torque']}")
-                st.write(f"**Top Speed:** {performance['top_speed']}")
-                st.write(f"**Acceleration:** {performance['acceleration']}")
-                
-                # Technical Specifications
-                st.subheader(texts[st.session_state.language]["technical"])
-                tech_specs = specs["technical_specs"]
-                st.write(f"**Length:** {tech_specs['length']}")
-                st.write(f"**Width:** {tech_specs['width']}")
-                st.write(f"**Height:** {tech_specs['height']}")
-                st.write(f"**Wheelbase:** {tech_specs['wheelbase']}")
-                st.write(f"**Weight:** {tech_specs['weight']}")
-                st.write(f"**Seating Capacity:** {tech_specs['seating_capacity']}")
-                st.write(f"**Trunk Capacity:** {tech_specs['trunk_capacity']}")
-                
-                # Features
-                st.subheader(texts[st.session_state.language]["features"])
-                features = specs["features"]
-                st.write(f"**{texts[st.session_state.language]['price']}:** {features['price_range']}")
-                
-                st.write(f"**{texts[st.session_state.language]['safety']}:**")
-                for feature in features["safety_features"]:
-                    st.write(f"- {feature}")
-                    
-                st.write(f"**{texts[st.session_state.language]['comfort']}:**")
-                for feature in features["comfort_features"]:
-                    st.write(f"- {feature}")
-                    
-                st.write(f"**{texts[st.session_state.language]['tech']}:**")
-                for feature in features["technology_features"]:
-                    st.write(f"- {feature}")
-                
-                # Add comparison button
-                if st.button(texts[st.session_state.language]["compare"]):
-                    st.switch_page("pages/compare.py")
-                
-                # Add identify button
-                if st.button(texts[st.session_state.language]["identify"]):
-                    st.switch_page("pages/identify.py")
+            # Get specifications using Gemini
+            specs_prompt = f"""قم بإنشاء مواصفات تفصيلية لسيارة {year} {brand} {model} بتنسيق JSON:
+            {{
+                "basic_info": {{
+                    "brand": "{brand}",
+                    "model": "{model}",
+                    "year": "{year}",
+                    "type": "{car_type}"
+                }},
+                "performance": {{
+                    "fuel_consumption": "استهلاك الوقود",
+                    "engine_size": "حجم المحرك",
+                    "cylinders": "عدد الأسطوانات",
+                    "transmission": "نوع ناقل الحركة",
+                    "fuel_type": "نوع الوقود",
+                    "horsepower": "قوة المحرك",
+                    "torque": "عزم الدوران",
+                    "top_speed": "السرعة القصوى",
+                    "acceleration": "التسارع"
+                }},
+                "technical_specs": {{
+                    "length": "الطول",
+                    "width": "العرض",
+                    "height": "الارتفاع",
+                    "wheelbase": "قاعدة العجلات",
+                    "weight": "الوزن",
+                    "seating_capacity": "سعة المقاعد",
+                    "trunk_capacity": "سعة الصندوق"
+                }},
+                "features": {{
+                    "price_range": "نطاق السعر",
+                    "safety_features": ["مميزات الأمان"],
+                    "comfort_features": ["مميزات الراحة"],
+                    "technology_features": ["المميزات التكنولوجية"]
+                }}
+            }}
+            يجب أن تكون جميع الإجابات باللغة العربية.
+            قم بإرجاع كائن JSON فقط، بدون أي نص إضافي قبل أو بعد الكائن."""
+            
+            response = text_model.generate_content(specs_prompt)
+            specs_text = clean_json_string(response.text)
+            specs = json.loads(specs_text)
     else:
-        st.warning(texts[st.session_state.language]["no_image"]) 
+        st.warning("يرجى إما رفع صورة أو إدخال بيانات السيارة / Please either upload an image or enter car details")
+        st.stop()
+    
+    if car_details and specs:
+        # Store car details
+        car_data = {
+            'details': car_details,
+            'specs': specs,
+            'image': image if uploaded_file else None
+        }
+        
+        # Save to database
+        save_car(car_data)
+        
+        # Display specifications
+        st.subheader(texts[st.session_state.language]["specs"])
+        
+        # Basic Information
+        st.subheader(texts[st.session_state.language]["basic_info"])
+        basic_info = specs["basic_info"]
+        st.write(f"**Brand:** {basic_info['brand']}")
+        st.write(f"**Model:** {basic_info['model']}")
+        st.write(f"**Year:** {basic_info['year']}")
+        st.write(f"**Type:** {basic_info['type']}")
+        
+        # Performance
+        st.subheader(texts[st.session_state.language]["performance"])
+        performance = specs["performance"]
+        st.write(f"**Fuel Consumption:** {performance['fuel_consumption']}")
+        st.write(f"**Engine Size:** {performance['engine_size']}")
+        st.write(f"**Cylinders:** {performance['cylinders']}")
+        st.write(f"**Transmission:** {performance['transmission']}")
+        st.write(f"**Fuel Type:** {performance['fuel_type']}")
+        st.write(f"**Horsepower:** {performance['horsepower']}")
+        st.write(f"**Torque:** {performance['torque']}")
+        st.write(f"**Top Speed:** {performance['top_speed']}")
+        st.write(f"**Acceleration:** {performance['acceleration']}")
+        
+        # Technical Specifications
+        st.subheader(texts[st.session_state.language]["technical"])
+        tech_specs = specs["technical_specs"]
+        st.write(f"**Length:** {tech_specs['length']}")
+        st.write(f"**Width:** {tech_specs['width']}")
+        st.write(f"**Height:** {tech_specs['height']}")
+        st.write(f"**Wheelbase:** {tech_specs['wheelbase']}")
+        st.write(f"**Weight:** {tech_specs['weight']}")
+        st.write(f"**Seating Capacity:** {tech_specs['seating_capacity']}")
+        st.write(f"**Trunk Capacity:** {tech_specs['trunk_capacity']}")
+        
+        # Features
+        st.subheader(texts[st.session_state.language]["features"])
+        features = specs["features"]
+        st.write(f"**{texts[st.session_state.language]['price']}:** {features['price_range']}")
+        
+        st.write(f"**{texts[st.session_state.language]['safety']}:**")
+        for feature in features["safety_features"]:
+            st.write(f"- {feature}")
+            
+        st.write(f"**{texts[st.session_state.language]['comfort']}:**")
+        for feature in features["comfort_features"]:
+            st.write(f"- {feature}")
+            
+        st.write(f"**{texts[st.session_state.language]['tech']}:**")
+        for feature in features["technology_features"]:
+            st.write(f"- {feature}")
+        
+        # Add comparison button
+        if st.button(texts[st.session_state.language]["compare"], label_visibility="visible"):
+            st.switch_page("pages/compare.py")
+        
+        # Add identify button
+        if st.button(texts[st.session_state.language]["identify"], label_visibility="visible"):
+            st.switch_page("pages/identify.py") 
