@@ -114,12 +114,15 @@ if 'selected_cars' not in st.session_state:
 cols = st.columns(3)
 for i, car in enumerate(detected_cars):
     with cols[i % 3]:
-        st.image(car['image'], width=200)
+        if car['image'] is not None:
+            st.image(car['image'], width=200)
+        else:
+            st.write("لا توجد صورة / No image available")
         st.write(f"**{car['details']['brand']} {car['details']['model']} ({car['details']['year']})**")
         st.write(f"**Type:** {car['details']['type']}")
         
-        # Create two columns for buttons
-        col1, col2 = st.columns(2)
+        # Create three columns for buttons
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             # View button
@@ -135,6 +138,13 @@ for i, car in enumerate(detected_cars):
             else:
                 if car in st.session_state.selected_cars:
                     st.session_state.selected_cars.remove(car)
+        
+        with col3:
+            # Delete button
+            if st.button(f"{texts[language]['delete']} {i+1}", key=f"delete_{i}"):
+                if st.checkbox(texts[language]["delete_confirm"], key=f"confirm_delete_{i}"):
+                    delete_car(car['id'])
+                    st.rerun()
 
 # Check if we're viewing a car's details
 if 'viewing_car' in st.session_state:
