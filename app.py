@@ -259,7 +259,7 @@ with col1:
     )
 
 # Process button - always visible
-if st.button(texts[st.session_state.language]["detect"], label_visibility="visible"):
+if st.button(texts[st.session_state.language]["detect"]):
     if uploaded_file:
         # Process image
         image = Image.open(uploaded_file)
@@ -388,9 +388,9 @@ if st.button(texts[st.session_state.language]["detect"], label_visibility="visib
             st.write(f"- {feature}")
         
         # Add comparison button
-        if st.button(texts[st.session_state.language]["compare"], label_visibility="visible"):
+        if st.button(texts[st.session_state.language]["compare"]):
             st.switch_page("pages/compare.py")
         
         # Add identify button
-        if st.button(texts[st.session_state.language]["identify"], label_visibility="visible"):
+        if st.button(texts[st.session_state.language]["identify"]):
             st.switch_page("pages/identify.py") 
